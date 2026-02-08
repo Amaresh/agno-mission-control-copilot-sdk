@@ -44,6 +44,67 @@ _GITHUB_WRITE_TOOLS = frozenset({
 })
 
 
+def _audit_write_tool(
+    tool_name: str,
+    event_data: Any,
+    allowed_owner: Optional[str],
+    allowed_repo: Optional[str],
+) -> None:
+    """Log a critical warning if a write tool targets an unexpected repo.
+
+    This is a defense-in-depth observer — _scoped_mcp_servers() is the
+    primary gate that strips write tools when no repo scope is set.  This
+    function catches cases where a scoped session still targets a
+    different repository than the one allowed.
+
+    Accepts the raw SDK event.data object so arguments are not
+    pre-stringified or truncated.
+    """
+    import json as _json
+
+    target_owner = None
+    target_repo = None
+
+    # Extract raw arguments — may be a dict, JSON string, or absent
+    raw_args = (
+        getattr(event_data, 'arguments', None)
+        or getattr(event_data, 'input', None)
+    )
+    if isinstance(raw_args, dict):
+        target_owner = (raw_args.get("owner") or "").lower()
+        target_repo = (raw_args.get("repo") or "").lower()
+    elif isinstance(raw_args, str):
+        try:
+            parsed = _json.loads(raw_args)
+            target_owner = (parsed.get("owner") or "").lower()
+            target_repo = (parsed.get("repo") or "").lower()
+        except (ValueError, AttributeError, TypeError):
+            logger.debug(
+                "Could not parse write-tool arguments for audit",
+                tool=tool_name,
+            )
+
+    if not target_owner or not target_repo:
+        return  # Can't determine target; nothing to audit
+
+    if allowed_owner and allowed_repo:
+        if target_owner != allowed_owner or target_repo != allowed_repo:
+            logger.critical(
+                "REPO SCOPE VIOLATION: write tool targets wrong repo",
+                tool=tool_name,
+                target=f"{target_owner}/{target_repo}",
+                allowed=f"{allowed_owner}/{allowed_repo}",
+            )
+    else:
+        # No scope set but write tool is being called — should have been
+        # stripped by _scoped_mcp_servers(); log for investigation.
+        logger.critical(
+            "REPO SCOPE VIOLATION: write tool called without scope",
+            tool=tool_name,
+            target=f"{target_owner}/{target_repo}",
+        )
+
+
 # Global session cache: user_id -> (session, sdk_session_id)
 # This preserves SDK session IDs across requests for the same user
 _session_cache: Dict[str, Dict[str, Any]] = {}
@@ -332,15 +393,30 @@ class CopilotModel(Model):
                 done_event.set()
             elif etype == SessionEventType.TOOL_EXECUTION_START:
                 tool_name = getattr(event.data, 'tool_name', None) or getattr(event.data, 'name', '?')
-                tool_name = getattr(event.data, 'tool_name', None) or getattr(event.data, 'name', '?')
-                # Log all event.data attributes for debugging
+                # Full attributes at DEBUG only — may contain file contents / secrets
                 data_attrs = {k: str(v)[:200] for k, v in vars(event.data).items() if not k.startswith('_')} if hasattr(event.data, '__dict__') else str(event.data)[:300]
-                logger.info("Tool call started", tool=tool_name, data=data_attrs)
+
+                # Defense-in-depth: audit write-tool calls against repo scope.
+                # Config-stripping (_scoped_mcp_servers) is the primary gate;
+                # this catches edge cases where a scoped session targets a
+                # different repo than the one allowed.
+                if tool_name in _GITHUB_WRITE_TOOLS:
+                    _audit_write_tool(
+                        tool_name, event.data,
+                        self._allowed_owner, self._allowed_repo,
+                    )
+
+                # Minimal INFO log; verbose attrs only at DEBUG to avoid
+                # leaking file contents or secrets into application logs.
+                _safe_keys = {"owner", "repo", "path", "branch", "ref", "query"}
+                safe_summary = {k: v for k, v in data_attrs.items() if k in _safe_keys}
+                logger.info("Tool call started", tool=tool_name, **safe_summary)
+                logger.debug("Tool call detail", tool=tool_name, data=data_attrs)
             elif etype == SessionEventType.TOOL_EXECUTION_COMPLETE:
                 tool_name = getattr(event.data, 'tool_name', None) or getattr(event.data, 'name', '?')
-                # Dump all non-None data attributes to find the result field
                 data_attrs = {k: str(v)[:300] for k, v in vars(event.data).items() if not k.startswith('_') and v is not None} if hasattr(event.data, '__dict__') else str(event.data)[:500]
-                logger.info("Tool call completed", tool=tool_name, data=data_attrs)
+                logger.info("Tool call completed", tool=tool_name)
+                logger.debug("Tool call result", tool=tool_name, data=data_attrs)
             elif etype == SessionEventType.SESSION_ERROR:
                 err = getattr(event.data, 'message', None) or getattr(event.data, 'error', str(event.data))
                 logger.error("Copilot session error", error=err)

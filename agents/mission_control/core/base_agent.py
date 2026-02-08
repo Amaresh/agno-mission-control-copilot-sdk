@@ -242,6 +242,8 @@ A helpful and efficient AI agent.
 
         # Apply deferred repo scope (set_repo_scope() may have been called
         # before _init_agent, so propagate the persisted scope now).
+        # Assign self._agent first so set_repo_scope can reach the model.
+        self._agent = agent
         if self._repo_scope:
             self.set_repo_scope(self._repo_scope)
 
@@ -272,7 +274,11 @@ A helpful and efficient AI agent.
         # Only added for agents with "github" in their mcp_servers list.
         #
         # IMPORTANT: Agents must NEVER modify the mission-control repo itself.
-        # We restrict GitHub MCP to read-only + issue/PR tools (no file writes).
+        # Write tools (create_branch, create_or_update_file, create_pull_request) are included in
+        # the allowlist but gated by repo-scope enforcement:
+        #   - Agno path: RepoScopedMCPTools blocks wrong-repo calls
+        #   - SDK path: CopilotModel._scoped_mcp_servers() strips write tools
+        #     when no repo scope is active; event handler audits target repo
         from agents.config import settings
         if "github" in self.mcp_servers and settings.github_token:
             wrapper_path = self._ensure_github_mcp_wrapper(settings.github_token)
