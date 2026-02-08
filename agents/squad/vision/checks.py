@@ -389,9 +389,10 @@ async def check_review_without_prs() -> List[HealthCheckResult]:
             return results
 
         for task in tasks:
-            # Extract repo from description
-            repo = None
-            if task.description and "Repository:" in task.description:
+            # Get repo from mission_config (preferred) or description (fallback)
+            config = task.mission_config or {}
+            repo = config.get("repository")
+            if not repo and task.description and "Repository:" in task.description:
                 for line in task.description.split("\n"):
                     if line.startswith("Repository:"):
                         repo = line.split(":", 1)[1].strip()

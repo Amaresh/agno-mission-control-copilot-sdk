@@ -303,69 +303,9 @@ class JarvisAgent(BaseAgent):
         return f"Processed {len(results)} notifications"
 
     async def _handle_review_tasks(self, tasks: list[dict]) -> str:
-        """
-        ProofOfWork Gatekeeper — no PR, no closure.
-
-        Programmatically checks for matching PRs and updates task status
-        directly in the database.  The LLM is NOT relied upon for status
-        transitions (it consistently fails to call the right MCP tool).
-        """
-        import uuid
-
-        from agents.mission_control.core.pr_check import extract_target_repo, has_open_pr_for_task
-
-        done_count = 0
-        assigned_count = 0
-
-        async with AsyncSessionLocal() as session:
-            for t in tasks:
-                tid = uuid.UUID(t["id"])
-                desc = t.get("description", "")
-                title = t["title"]
-
-                # Re-fetch to get current status (may have changed)
-                stmt = select(Task).where(Task.id == tid)
-                result = await session.execute(stmt)
-                task = result.scalar_one_or_none()
-                if not task or task.status != TaskStatus.REVIEW:
-                    continue
-
-                # Check for matching open PR
-                target_repo = extract_target_repo(desc)
-                pr_found = False
-                if target_repo:
-                    short_id = str(tid)[:8]
-                    pr_found, pr_url = await has_open_pr_for_task(target_repo, short_id)
-                    if pr_found:
-                        self.logger.info("PR found for task", task=title[:50], pr=pr_url)
-
-                if pr_found:
-                    task.status = TaskStatus.DONE
-                    activity = Activity(
-                        type=ActivityType.TASK_STATUS_CHANGED,
-                        task_id=task.id,
-                        message="Status: review → done (PR verified by gatekeeper)",
-                    )
-                    session.add(activity)
-                    done_count += 1
-                    self.logger.info("Task approved", task=title[:50])
-                else:
-                    task.status = TaskStatus.ASSIGNED
-                    activity = Activity(
-                        type=ActivityType.TASK_STATUS_CHANGED,
-                        task_id=task.id,
-                        message="Status: review → assigned (no matching PR found)",
-                    )
-                    session.add(activity)
-                    assigned_count += 1
-                    self.logger.warning("Task rejected — no PR", task=title[:50])
-
-            await session.commit()
-
-        return (
-            f"Gatekeeper reviewed {len(tasks)} tasks: "
-            f"{done_count} approved, {assigned_count} sent back"
-        )
+        """ProofOfWork Gatekeeper — delegates to VerifyMission."""
+        from agents.mission_control.core.missions.verify import VerifyMission
+        return await VerifyMission.verify_batch(self, tasks)
 
     async def _handle_blocked_tasks(self, tasks: list[dict]) -> str:
         """Handle blocked tasks."""

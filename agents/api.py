@@ -54,6 +54,8 @@ class TaskRequest(BaseModel):
     description: str = ""
     assignees: list[str] = []
     priority: str = "medium"
+    repository: str = ""
+    source_branch: str = ""
 
 
 class TaskResponse(BaseModel):
@@ -151,30 +153,71 @@ async def chat_with_agent(agent_name: str, request: ChatRequest):
 @app.post("/task", response_model=TaskResponse)
 async def create_task(request: TaskRequest):
     """
-    Create a new task via Jarvis.
+    Create a new task directly in the database.
 
     Example:
         curl -X POST http://localhost:8000/task \
             -H "Content-Type: application/json" \
-            -d '{"title": "Fix login bug", "assignees": ["friday"]}'
+            -d '{"title": "Fix login bug", "assignees": ["friday"], "repository": "Amaresh/apiblender"}'
     """
-    from agents.squad.jarvis.agent import create_jarvis
-
-    jarvis = create_jarvis()
+    from agents.mission_control.core.database import (
+        AsyncSessionLocal, Task, TaskStatus, TaskPriority,
+        TaskAssignment, Activity, ActivityType, Notification,
+        Agent as AgentModel,
+    )
+    from sqlalchemy import select
 
     try:
-        task_id = await jarvis.create_task(
-            title=request.title,
-            description=request.description,
-            assignees=request.assignees,
-            priority=request.priority,
-        )
+        # Build mission_config
+        mission_config = {}
+        if request.repository:
+            mission_config["repository"] = request.repository
+        if request.source_branch:
+            mission_config["source_branch"] = request.source_branch
 
-        return TaskResponse(
-            task_id=task_id,
-            title=request.title,
-            assignees=request.assignees,
-        )
+        async with AsyncSessionLocal() as session:
+            assignee_name = request.assignees[0] if request.assignees else None
+
+            task = Task(
+                title=request.title,
+                description=request.description,
+                status=TaskStatus.ASSIGNED if assignee_name else TaskStatus.INBOX,
+                priority=TaskPriority(request.priority) if request.priority in [
+                    "low", "medium", "high", "critical"
+                ] else TaskPriority.MEDIUM,
+                mission_config=mission_config,
+            )
+            session.add(task)
+            await session.flush()
+
+            session.add(Activity(
+                type=ActivityType.TASK_CREATED,
+                task_id=task.id,
+                message=f"Created task: {request.title}",
+            ))
+
+            assigned = []
+            if assignee_name:
+                result = await session.execute(
+                    select(AgentModel).where(AgentModel.name.ilike(assignee_name))
+                )
+                agent = result.scalar_one_or_none()
+                if agent:
+                    session.add(TaskAssignment(task_id=task.id, agent_id=agent.id))
+                    session.add(Notification(
+                        mentioned_agent_id=agent.id,
+                        content=f"You have been assigned: {request.title}",
+                    ))
+                    assigned.append(agent.name)
+
+            await session.commit()
+            logger.info("Task created via API", task_id=str(task.id), title=request.title)
+
+            return TaskResponse(
+                task_id=str(task.id),
+                title=request.title,
+                assignees=assigned,
+            )
     except Exception as e:
         logger.error("Task creation error", error=str(e))
         raise HTTPException(status_code=500, detail="Internal server error")

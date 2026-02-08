@@ -147,21 +147,47 @@ Mission Control is designed to run autonomously on a cheap server (a $12 Digital
 
 ## Task Workflow
 
+### Mission Architecture
+
+Tasks are driven by **mission classes** — self-contained workflow engines that own the full lifecycle of a task phase. The factory dispatches to the correct mission based on `task.mission_type`.
+
 ```
-INBOX → ASSIGNED → IN_PROGRESS → REVIEW → DONE
-  │        ↑            │           │
-  │     (assign_task    │        (Jarvis checks
-  │      transitions    │         for open PR)
-  │      status)        │
-  └─────────────────────┘
-       (stale task reset by Vision)
+                        ┌──────────────────┐
+                        │   Task Created    │
+                        │  mission_type     │
+                        │  mission_config   │
+                        └────────┬─────────┘
+                                 │
+              ┌──────────────────┼──────────────────┐
+              │                  │                   │
+     ┌────────▼────────┐  ┌─────▼──────┐   ┌───────▼───────┐
+     │  BuildMission   │  │VerifyMission│   │ (TestMission) │
+     │ ASSIGNED →      │  │ REVIEW →   │   │  future       │
+     │ IN_PROGRESS →   │  │ DONE or    │   │               │
+     │ REVIEW          │  │ ASSIGNED   │   │               │
+     └─────────────────┘  └────────────┘   └───────────────┘
 ```
 
-**Rules:**
-- Every task must target a `repository`
+**BuildMission** (default): Branch creation → agent execution → error recovery → PR verification → REVIEW  
+**VerifyMission**: PR lookup (task ID + agent prefix fallback) → approve to DONE or reject to ASSIGNED
+
+### Task Config via `mission_config` (JSONB)
+
+Every task carries a `mission_config` column with structured config instead of parsing freetext descriptions:
+
+```json
+{
+  "repository": "owner/repo",
+  "source_branch": "main",
+  "context_files": ["src/api.py", "docs/spec.md"]
+}
+```
+
+### Lifecycle Rules
+- Every task must target a `repository` (via `mission_config` or description fallback)
 - Every task must produce a Pull Request — no PR = not complete
 - 1:1 assignment: each task → one primary agent
-- Jarvis reviews: PR exists + quality → DONE; no PR → back to ASSIGNED
+- Jarvis reviews: PR exists → DONE; no PR → back to ASSIGNED
 - Vision auto-heals: stale tasks (>1.5h) reset to INBOX; long-running (>6h) flagged
 
 ## Kanban Dashboard
@@ -331,7 +357,7 @@ python -m agents.cli start               # Start daemon with scheduler
 | GET | `/tasks` | Kanban board (paginated DONE) |
 | POST | `/chat` | Chat with Jarvis |
 | POST | `/chat/{agent}` | Chat with specific agent |
-| POST | `/task` | Create a new task |
+| POST | `/task` | Create a new task (accepts `repository`, `source_branch` for mission config) |
 | GET | `/standup` | Daily standup |
 | POST | `/heartbeat/{agent}` | Trigger agent heartbeat |
 | GET | `/dashboard` | **Kanban dashboard UI** |
@@ -375,7 +401,14 @@ agno-mission-control-copilot/
 │   │   │   ├── base_agent.py           # BaseAgent (Agno + Copilot SDK)
 │   │   │   ├── copilot_model.py        # CopilotModel (SDK wrapper)
 │   │   │   ├── database.py             # SQLAlchemy models (Task, Agent, etc.)
-│   │   │   └── factory.py              # AgentFactory + AGENT_CONFIGS
+│   │   │   ├── factory.py              # AgentFactory + GenericAgent (mission dispatch)
+│   │   │   ├── pr_check.py             # PR existence checks for review gating
+│   │   │   ├── missions/               # Mission workflow classes
+│   │   │   │   ├── base.py             # BaseMission ABC
+│   │   │   │   ├── build.py            # BuildMission: ASSIGNED→REVIEW
+│   │   │   │   └── verify.py           # VerifyMission: REVIEW→DONE
+│   │   │   └── migrations/
+│   │   │       └── 001_add_mission_columns.sql
 │   │   ├── mcp/
 │   │   │   ├── mission_control_server.py  # FastMCP server (SSE :8001)
 │   │   │   └── manager.py             # MCP tool management

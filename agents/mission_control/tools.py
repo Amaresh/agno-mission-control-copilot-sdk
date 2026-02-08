@@ -37,6 +37,8 @@ async def create_task(
     description: str = "",
     assignees: str = "",
     priority: str = "medium",
+    repository: str = "",
+    source_branch: str = "",
 ) -> str:
     """
     Create a new task in Mission Control.
@@ -46,6 +48,8 @@ async def create_task(
         description: Detailed description of the task
         assignees: Comma-separated agent names to assign (e.g., "friday,shuri")
         priority: Task priority - low, medium, high, or critical
+        repository: Target GitHub repo (e.g., "Amaresh/apiblender"). Stored in mission_config.
+        source_branch: Base branch to branch from (default: repo default). Stored in mission_config.
 
     Returns:
         Confirmation message with task ID
@@ -80,12 +84,32 @@ async def create_task(
         if existing.scalar_one_or_none():
             return f"⚠️ Task already exists with title: '{title}'. Use a different title or update the existing task."
 
+        # Build mission_config from explicit params + description fallback
+        mission_config = {}
+        repo = (repository or "").strip()
+        if not repo and description and "Repository:" in description:
+            import re
+            m = re.search(r"Repository:\s*(\S+)", description)
+            if m:
+                repo = m.group(1).strip()
+        if repo:
+            mission_config["repository"] = repo
+        branch = (source_branch or "").strip()
+        if not branch and description and "Base Branch:" in description:
+            import re
+            m = re.search(r"Base Branch:\s*(\S+)", description)
+            if m:
+                branch = m.group(1).strip()
+        if branch:
+            mission_config["source_branch"] = branch
+
         # Create task
         task = Task(
             title=title,
             description=description,
             status=TaskStatus.ASSIGNED if assignee_list else TaskStatus.INBOX,
             priority=TaskPriority(priority) if priority in ["low", "medium", "high", "critical"] else TaskPriority.MEDIUM,
+            mission_config=mission_config,
         )
         session.add(task)
         await session.flush()

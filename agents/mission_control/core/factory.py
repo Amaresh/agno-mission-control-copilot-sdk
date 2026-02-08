@@ -179,6 +179,8 @@ class GenericAgent(BaseAgent):
                     "task_id": str(in_progress.id),
                     "title": in_progress.title,
                     "description": in_progress.description,
+                    "mission_type": in_progress.mission_type,
+                    "mission_config": in_progress.mission_config,
                     "status": "in_progress",
                 }
 
@@ -202,6 +204,8 @@ class GenericAgent(BaseAgent):
                     "task_id": str(task.id),
                     "title": task.title,
                     "description": task.description,
+                    "mission_type": task.mission_type,
+                    "mission_config": task.mission_config,
                 }
 
             # Lead agents also review tasks in REVIEW status
@@ -217,7 +221,7 @@ class GenericAgent(BaseAgent):
                     return {
                         "type": "review_tasks",
                         "tasks": [
-                            {"title": t.title, "task_id": str(t.id), "description": t.description or ""}
+                            {"title": t.title, "id": str(t.id), "description": t.description or "", "mission_config": t.mission_config}
                             for t in review_tasks
                         ],
                     }
@@ -229,15 +233,8 @@ class GenericAgent(BaseAgent):
         from sqlalchemy import select
 
         from agents.mission_control.core.database import (
-            Activity,
-            ActivityType,
             AsyncSessionLocal,
             Notification,
-            Task,
-            TaskStatus,
-        )
-        from agents.mission_control.core.database import (
-            Agent as AgentModel,
         )
 
         work_type = work.get("type")
@@ -269,203 +266,23 @@ class GenericAgent(BaseAgent):
             task_id = work.get("task_id")
             title = work.get("title", "")
             description = work.get("description", "")
+            mission_config = work.get("mission_config", {})
 
-            # Transition ASSIGNED → IN_PROGRESS
-            async with AsyncSessionLocal() as session:
-                stmt = select(Task).where(Task.id == task_id)
-                result = await session.execute(stmt)
-                task = result.scalar_one_or_none()
-                if task and task.status == TaskStatus.ASSIGNED:
-                    task.status = TaskStatus.IN_PROGRESS
-                    activity = Activity(
-                        type=ActivityType.TASK_STATUS_CHANGED,
-                        agent_id=task_id,  # will be set below
-                        task_id=task.id,
-                        message="Status: assigned → in_progress",
-                    )
-                    # Get agent id for activity
-                    agent_result = await session.execute(
-                        select(AgentModel).where(AgentModel.name == self.name)
-                    )
-                    agent_record = agent_result.scalar_one_or_none()
-                    if agent_record:
-                        activity.agent_id = agent_record.id
-                    session.add(activity)
-                    await session.commit()
-
-            response = None
-            success = True
-            target_branch = "main"
-            # Extract repository context from description if present
-            repo_line = ""
-            if description and "Repository:" in description:
-                for line in description.split("\n"):
-                    if line.strip().startswith("Repository:"):
-                        repo_line = line.strip()
-                        break
-            try:
-                repo_context = ""
-                repo_name = ""
-                if repo_line:
-                    repo_name = repo_line.replace("Repository:", "").strip()
-                    repo_context = (
-                        f"**Target Repository:** `{repo_name}` on GitHub\n\n"
-                    )
-                # Enforce target repo at the MCP tool level
-                self.set_repo_scope(repo_name or None)
-
-                branch_name = f"{self.name.lower()}/{task_id[:8]}"
-                owner_repo = repo_name.split("/", 1) if "/" in repo_name else ("", "")
-                response = await self.run(
-                    f"Execute the following task by calling GitHub MCP tools NOW. "
-                    f"Do not explain, plan, or ask questions — just call the tools.\n\n"
-                    f"Task: {title}\n"
-                    f"Description: {description}\n\n"
-                    f"{repo_context}"
-                    f"STEP 1: Call `create_branch` with owner=\"{owner_repo[0]}\", "
-                    f"repo=\"{owner_repo[1]}\", branch=\"{branch_name}\", "
-                    f"from_branch=\"{target_branch}\". If branch already exists, skip to step 2.\n\n"
-                    f"STEP 2: Call `create_or_update_file` to create deliverable files. "
-                    f"Use owner=\"{owner_repo[0]}\", repo=\"{owner_repo[1]}\", "
-                    f"branch=\"{branch_name}\". Write real, complete implementation code — "
-                    f"NOT plan documents, NOT outlines, NOT markdown breakdowns. "
-                    f"Deliver .py/.js/.ts/.yaml files with working logic. "
-                    f"The path is relative to the repo root (e.g. \"src/monitoring/health.py\").\n\n"
-                    f"STEP 3: Call `create_pull_request` with owner=\"{owner_repo[0]}\", "
-                    f"repo=\"{owner_repo[1]}\", head=\"{branch_name}\", base=\"{target_branch}\", "
-                    f"title=\"{title}\".\n\n"
-                    f"RULES: No local git/shell/filesystem commands. No Copilot skills. "
-                    f"No update_task_status. No plan/outline/breakdown .md files. Only repo `{repo_name}`. "
-                    f"Call the first tool now."
-                )
-            except Exception as e:
-                self.logger.error("Agent run failed", error=str(e), task=title[:50])
-                response = f"ERROR: {e}"
-                success = False
-            finally:
-                # Clear repo scope
-                self.set_repo_scope(None)
-
-                from agents.mission_control.learning.capture import capture_task_outcome
-                await capture_task_outcome(
-                    agent_name=self.name,
-                    task_id=str(task_id),
-                    task_title=title,
-                    from_status="in_progress",
-                    to_status="review",
-                    duration_seconds=0.0,
-                    success=success,
-                    response_preview=response[:200] if response else None,
-                    error=response if not success else None,
-                )
-                # Only transition IN_PROGRESS → REVIEW if an open PR exists
-                from agents.mission_control.core.pr_check import (
-                    extract_target_repo,
-                    has_open_pr,
-                )
-                target_repo = extract_target_repo(description)
-                pr_found = False
-                if target_repo:
-                    head_prefix = f"{self.name.lower()}/"
-                    pr_found, pr_url = await has_open_pr(target_repo, head_prefix)
-                    if pr_found:
-                        self.logger.info("PR verified", pr=pr_url, repo=target_repo)
-                    else:
-                        self.logger.warning(
-                            "Task kept IN_PROGRESS — no open PR found",
-                            repo=target_repo,
-                            head_prefix=head_prefix,
-                        )
-                else:
-                    self.logger.warning(
-                        "No target repo in description — keeping IN_PROGRESS"
-                    )
-
-                if pr_found:
-                    async with AsyncSessionLocal() as session:
-                        stmt = select(Task).where(Task.id == task_id)
-                        result = await session.execute(stmt)
-                        task = result.scalar_one_or_none()
-                        if task and task.status == TaskStatus.IN_PROGRESS:
-                            task.status = TaskStatus.REVIEW
-                            agent_result = await session.execute(
-                                select(AgentModel).where(AgentModel.name == self.name)
-                            )
-                            agent_record = agent_result.scalar_one_or_none()
-                            msg = "Status: in_progress → review"
-                            if response:
-                                msg += f". Agent output: {response[:200]}"
-                            activity = Activity(
-                                type=ActivityType.TASK_STATUS_CHANGED,
-                                agent_id=agent_record.id if agent_record else task_id,
-                                task_id=task.id,
-                                message=msg,
-                            )
-                            session.add(activity)
-                            await session.commit()
-                            self.logger.info("Task moved to review", task=title[:50])
-
-            return f"Completed: {title}"
+            from agents.mission_control.core.missions import get_mission
+            MissionClass = get_mission(work.get("mission_type", "build"))
+            mission = MissionClass(
+                agent=self,
+                task_id=task_id,
+                title=title,
+                description=description,
+                mission_config=mission_config,
+            )
+            return await mission.execute()
 
         elif work_type == "review_tasks":
             tasks = work.get("tasks", [])
-            import uuid as _uuid
-
-            from agents.mission_control.core.pr_check import (
-                extract_target_repo,
-                has_open_pr_for_task,
-            )
-
-            done_count = 0
-            assigned_count = 0
-
-            async with AsyncSessionLocal() as session:
-                for t in tasks:
-                    tid = _uuid.UUID(t["task_id"])
-                    desc = t.get("description", "")
-                    title = t["title"]
-
-                    stmt = select(Task).where(Task.id == tid)
-                    result = await session.execute(stmt)
-                    task = result.scalar_one_or_none()
-                    if not task or task.status != TaskStatus.REVIEW:
-                        continue
-
-                    target_repo = extract_target_repo(desc)
-                    pr_found = False
-                    if target_repo:
-                        short_id = str(tid)[:8]
-                        pr_found, pr_url = await has_open_pr_for_task(target_repo, short_id)
-                        if pr_found:
-                            self.logger.info("PR found for task", task=title[:50], pr=pr_url)
-
-                    if pr_found:
-                        task.status = TaskStatus.DONE
-                        activity = Activity(
-                            type=ActivityType.TASK_STATUS_CHANGED,
-                            task_id=task.id,
-                            message="Status: review → done (PR verified by reviewer)",
-                        )
-                        session.add(activity)
-                        done_count += 1
-                        self.logger.info("Task approved", task=title[:50])
-                    else:
-                        task.status = TaskStatus.ASSIGNED
-                        activity = Activity(
-                            type=ActivityType.TASK_STATUS_CHANGED,
-                            task_id=task.id,
-                            message="Status: review → assigned (no matching PR found)",
-                        )
-                        session.add(activity)
-                        assigned_count += 1
-                        self.logger.warning("Task rejected — no PR", task=title[:50])
-
-                await session.commit()
-
-            return (
-                f"Reviewed {len(tasks)} tasks: "
-                f"{done_count} approved, {assigned_count} sent back"
-            )
+            from agents.mission_control.core.missions.verify import VerifyMission
+            return await VerifyMission.verify_batch(self, tasks)
 
         return "HEARTBEAT_OK"
 
