@@ -60,6 +60,12 @@ class VisionHealer:
                     session.add(activity)
                     await session.commit()
                     self.logger.debug("Recorded heartbeat in DB")
+                else:
+                    self.logger.warning(
+                        "Agent row not found in DB — heartbeat not recorded. "
+                        "Run DB seeding to create the agent record.",
+                        agent_name=self.name,
+                    )
         except Exception as e:
             self.logger.warning("Failed to record heartbeat", error=str(e))
 
