@@ -1,0 +1,126 @@
+version: '3.8'
+
+services:
+  # ===========================================
+  # Mission Control Agent Service
+  # ===========================================
+  mission-control:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile
+    container_name: mission-control
+    environment:
+      # LLM
+      - OLLAMA_HOST=http://ollama:11434
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      # GitHub
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      # DigitalOcean
+      - DO_API_TOKEN=${DO_API_TOKEN}
+      # Telegram (Jarvis)
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      # Twilio (Pepper)
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
+      - TWILIO_PHONE_NUMBER=${TWILIO_PHONE_NUMBER}
+      - SENDGRID_API_KEY=${SENDGRID_API_KEY:-}
+      # Tavily (Fury)
+      - TAVILY_API_KEY=${TAVILY_API_KEY}
+      # Database
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/mission_control
+      - REDIS_URL=redis://redis:6379
+      # App
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+      redis:
+        condition: service_started
+    volumes:
+      - agent-memory:/app/agents/squad
+    restart: unless-stopped
+    networks:
+      - mission-control-net
+
+  # ===========================================
+  # Ollama LLM Service (CPU Mode)
+  # ===========================================
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    volumes:
+      - ollama-data:/root/.ollama
+    ports:
+      - "127.0.0.1:11434:11434"
+    restart: unless-stopped
+    # CPU-only configuration
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+        reservations:
+          memory: 4G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - mission-control-net
+
+  # ===========================================
+  # PostgreSQL with pgvector
+  # ===========================================
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: postgres
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=mission_control
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "127.0.0.1:5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mission-control-net
+
+  # ===========================================
+  # Redis (Caching & Rate Limiting)
+  # ===========================================
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    volumes:
+      - redis-data:/data
+    ports:
+      - "127.0.0.1:6379:6379"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mission-control-net
+
+volumes:
+  ollama-data:
+  postgres-data:
+  redis-data:
+  agent-memory:
+
+networks:
+  mission-control-net:
+    driver: bridge

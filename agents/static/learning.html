@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mission Control — Learning Analytics</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --border: #30363d;
+    --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff;
+    --green: #3fb950; --red: #f85149; --orange: #d29922; --purple: #bc8cff;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background:var(--bg); color:var(--text); }
+
+  /* NAV */
+  nav { display:flex; align-items:center; gap:16px; padding:12px 24px; background:var(--surface); border-bottom:1px solid var(--border); }
+  nav h1 { font-size:18px; font-weight:600; }
+  nav a { color:var(--accent); text-decoration:none; font-size:13px; }
+  nav .spacer { flex:1; }
+  nav .refresh-info { font-size:12px; color:var(--muted); }
+  #btn-refresh { background:var(--accent); color:#fff; border:none; border-radius:6px; padding:6px 14px; cursor:pointer; font-size:13px; }
+  #btn-refresh:hover { opacity:.85; }
+  select { background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:4px 8px; font-size:13px; }
+
+  /* LAYOUT */
+  .grid { display:grid; gap:16px; padding:20px 24px; }
+  .stats-row { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+  .charts-row { grid-template-columns: 1fr 1fr; }
+  .full-row { grid-template-columns: 1fr; }
+  @media(max-width:900px) { .charts-row { grid-template-columns:1fr; } }
+
+  /* CARDS */
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px; }
+  .card h3 { font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px; }
+  .stat-value { font-size:32px; font-weight:700; }
+  .stat-sub { font-size:12px; color:var(--muted); margin-top:4px; }
+  .stat-value.green { color:var(--green); }
+  .stat-value.orange { color:var(--orange); }
+  .stat-value.accent { color:var(--accent); }
+  .stat-value.purple { color:var(--purple); }
+
+  /* TABLE */
+  .table-wrap { max-height:400px; overflow-y:auto; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th { text-align:left; color:var(--muted); font-weight:500; padding:8px 10px; border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--surface); }
+  td { padding:8px 10px; border-bottom:1px solid var(--border); vertical-align:top; }
+  tr:hover td { background:rgba(88,166,255,.05); }
+  .badge { display:inline-block; padding:2px 8px; border-radius:12px; font-size:11px; font-weight:600; }
+  .badge-heartbeat { background:#1f3a2a; color:var(--green); }
+  .badge-task_outcome { background:#2a1f0d; color:var(--orange); }
+  .badge-error { background:#3a1f1f; color:var(--red); }
+  .badge-tool_usage { background:#1f1f3a; color:var(--purple); }
+  .ctx { color:var(--muted); font-size:12px; max-width:320px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  /* AGENT CARDS */
+  .agent-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap:12px; }
+  .agent-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px; }
+  .agent-card .name { font-weight:600; font-size:15px; margin-bottom:8px; }
+  .agent-card .metrics { display:grid; grid-template-columns:1fr 1fr; gap:6px; font-size:12px; }
+  .agent-card .metric-label { color:var(--muted); }
+  .agent-card .metric-val { font-weight:600; }
+
+  /* CHART CONTAINERS */
+  .chart-container { position:relative; height:260px; }
+
+  /* LOADING */
+  .loading { text-align:center; padding:40px; color:var(--muted); }
+</style>
+</head>
+<body>
+
+<nav>
+  <h1>📊 Learning Analytics</h1>
+  <a href="/dashboard">← Kanban</a>
+  <div class="spacer"></div>
+  <label>Range:
+    <select id="sel-hours">
+      <option value="6">6h</option>
+      <option value="24" selected>24h</option>
+      <option value="72">3d</option>
+      <option value="168">7d</option>
+    </select>
+  </label>
+  <span class="refresh-info">Auto-refresh 30s</span>
+  <button id="btn-refresh" onclick="loadAll()">↻ Refresh</button>
+</nav>
+
+<!-- STAT CARDS -->
+<div class="grid stats-row" id="stats-row">
+  <div class="card"><h3>Total Events</h3><div class="stat-value accent" id="s-total">—</div></div>
+  <div class="card"><h3>Heartbeats</h3><div class="stat-value green" id="s-heartbeats">—</div><div class="stat-sub" id="s-hb-avg"></div></div>
+  <div class="card"><h3>Task Outcomes</h3><div class="stat-value orange" id="s-tasks">—</div><div class="stat-sub" id="s-task-rate"></div></div>
+  <div class="card"><h3>Errors</h3><div class="stat-value" style="color:var(--red)" id="s-errors">—</div></div>
+  <div class="card"><h3>Tool Calls</h3><div class="stat-value purple" id="s-tools">—</div></div>
+  <div class="card"><h3>Patterns</h3><div class="stat-value" id="s-patterns">—</div></div>
+</div>
+
+<!-- CHARTS -->
+<div class="grid charts-row">
+  <div class="card">
+    <h3>Event Timeline</h3>
+    <div class="chart-container"><canvas id="chart-timeline"></canvas></div>
+  </div>
+  <div class="card">
+    <h3>Events by Agent</h3>
+    <div class="chart-container"><canvas id="chart-agents"></canvas></div>
+  </div>
+</div>
+
+<!-- AGENT PERFORMANCE -->
+<div class="grid full-row">
+  <div class="card">
+    <h3>Agent Performance</h3>
+    <div class="agent-grid" id="agent-grid"><div class="loading">Loading…</div></div>
+  </div>
+</div>
+
+<!-- PATTERNS TABLE -->
+<div class="grid full-row">
+  <div class="card">
+    <h3>Learning Patterns</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Type</th><th>Trigger</th><th>Confidence</th><th>Uses</th><th>Last Used</th></tr></thead>
+        <tbody id="patterns-body"><tr><td colspan="5" class="loading">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- RECENT EVENTS TABLE -->
+<div class="grid full-row">
+  <div class="card">
+    <h3>Recent Events</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Time</th><th>Type</th><th>Agent</th><th>Context</th><th>Outcome</th></tr></thead>
+        <tbody id="events-body"><tr><td colspan="5" class="loading">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '';
+let chartTimeline = null, chartAgents = null;
+
+function fmt(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+}
+function fmtFull(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString([], {month:'short', day:'numeric'}) + ' ' + d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+}
+function summarize(obj, max) {
+  if (!obj || typeof obj !== 'object') return '';
+  const s = Object.entries(obj).map(([k,v]) => `${k}: ${typeof v === 'string' ? v.slice(0,60) : v}`).join(', ');
+  return s.length > max ? s.slice(0, max) + '…' : s;
+}
+
+const COLORS = {
+  heartbeat:    {bg:'rgba(63,185,80,.15)', border:'#3fb950'},
+  task_outcome: {bg:'rgba(210,153,34,.15)', border:'#d29922'},
+  error:        {bg:'rgba(248,81,73,.15)', border:'#f85149'},
+  tool_usage:   {bg:'rgba(188,140,255,.15)', border:'#bc8cff'},
+};
+
+// ========== STATS ==========
+async function loadStats() {
+  const r = await fetch(`${API}/dashboard/learning/stats`);
+  const d = await r.json();
+  document.getElementById('s-total').textContent = d.total_events;
+  document.getElementById('s-heartbeats').textContent = d.by_type.heartbeat || 0;
+  document.getElementById('s-hb-avg').textContent = d.avg_heartbeat_seconds ? `avg ${d.avg_heartbeat_seconds}s` : '';
+  document.getElementById('s-tasks').textContent = d.by_type.task_outcome || 0;
+  document.getElementById('s-task-rate').textContent = d.task_success_rate != null ? `${Math.round(d.task_success_rate*100)}% success` : '';
+  document.getElementById('s-errors').textContent = d.by_type.error || 0;
+  document.getElementById('s-tools').textContent = d.by_type.tool_usage || 0;
+  document.getElementById('s-patterns').textContent = d.pattern_count;
+}
+
+// ========== TIMELINE CHART ==========
+async function loadTimeline() {
+  const hours = document.getElementById('sel-hours').value;
+  const r = await fetch(`${API}/dashboard/learning/timeline?hours=${hours}`);
+  const d = await r.json();
+
+  const labels = Object.keys(d.data).map(h => fmt(h));
+  const types = ['heartbeat','task_outcome','error','tool_usage'];
+  const datasets = types.map(t => ({
+    label: t.replace('_',' '),
+    data: Object.values(d.data).map(bucket => bucket[t] || 0),
+    backgroundColor: COLORS[t]?.bg || 'rgba(255,255,255,.1)',
+    borderColor: COLORS[t]?.border || '#fff',
+    borderWidth: 1.5,
+    fill: true,
+    tension: 0.3,
+  }));
+
+  if (chartTimeline) chartTimeline.destroy();
+  chartTimeline = new Chart(document.getElementById('chart-timeline'), {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode:'index', intersect:false },
+      scales: {
+        x: { ticks:{color:'#8b949e',maxTicksLimit:12}, grid:{color:'#21262d'} },
+        y: { beginAtZero:true, ticks:{color:'#8b949e',precision:0}, grid:{color:'#21262d'} },
+      },
+      plugins: { legend:{labels:{color:'#e6edf3',boxWidth:12,padding:12}} },
+    },
+  });
+}
+
+// ========== AGENTS CHART ==========
+async function loadAgentChart() {
+  const r = await fetch(`${API}/dashboard/learning/stats`);
+  const d = await r.json();
+  const names = Object.keys(d.by_agent);
+  const values = Object.values(d.by_agent);
+  const colors = ['#58a6ff','#3fb950','#d29922','#f85149','#bc8cff','#f778ba','#79c0ff'];
+
+  if (chartAgents) chartAgents.destroy();
+  chartAgents = new Chart(document.getElementById('chart-agents'), {
+    type: 'doughnut',
+    data: {
+      labels: names,
+      datasets: [{
+        data: values,
+        backgroundColor: names.map((_,i) => colors[i % colors.length]),
+        borderColor: 'transparent',
+      }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      cutout: '55%',
+      plugins: { legend:{position:'right',labels:{color:'#e6edf3',padding:10,boxWidth:12}} },
+    },
+  });
+}
+
+// ========== AGENT PERFORMANCE CARDS ==========
+async function loadAgentPerf() {
+  const r = await fetch(`${API}/dashboard/learning/agents`);
+  const agents = await r.json();
+  const grid = document.getElementById('agent-grid');
+
+  if (!agents.length) { grid.innerHTML = '<div class="loading">No agent data yet</div>'; return; }
+
+  grid.innerHTML = agents.map(a => `
+    <div class="agent-card">
+      <div class="name">${a.name}</div>
+      <div class="metrics">
+        <span class="metric-label">Heartbeats</span><span class="metric-val">${a.heartbeats}</span>
+        <span class="metric-label">Avg HB</span><span class="metric-val">${a.avg_heartbeat_sec}s</span>
+        <span class="metric-label">Tasks</span><span class="metric-val">${a.tasks_total} (${a.tasks_success}✓)</span>
+        <span class="metric-label">Avg Task</span><span class="metric-val">${a.tasks_avg_duration}s</span>
+        <span class="metric-label">Errors</span><span class="metric-val" style="color:${a.errors?'var(--red)':'var(--green)'}">${a.errors}</span>
+        <span class="metric-label">Last Seen</span><span class="metric-val">${fmt(a.last_heartbeat)}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ========== PATTERNS TABLE ==========
+async function loadPatterns() {
+  const r = await fetch(`${API}/dashboard/learning/patterns`);
+  const patterns = await r.json();
+  const body = document.getElementById('patterns-body');
+
+  if (!patterns.length) { body.innerHTML = '<tr><td colspan="5" style="color:var(--muted)">No patterns yet</td></tr>'; return; }
+
+  body.innerHTML = patterns.map(p => `<tr>
+    <td><span class="badge badge-${p.type.toLowerCase()}">${p.type}</span></td>
+    <td>${p.trigger || '—'}</td>
+    <td>${Math.round(p.confidence * 100)}%</td>
+    <td>${p.occurrences}</td>
+    <td style="color:var(--muted)">${fmtFull(p.last_used)}</td>
+  </tr>`).join('');
+}
+
+// ========== EVENTS TABLE ==========
+async function loadEvents() {
+  const r = await fetch(`${API}/dashboard/learning/events?limit=50`);
+  const events = await r.json();
+  const body = document.getElementById('events-body');
+
+  if (!events.length) { body.innerHTML = '<tr><td colspan="5" class="loading">No events yet</td></tr>'; return; }
+
+  body.innerHTML = events.map(e => `<tr>
+    <td style="white-space:nowrap;color:var(--muted)">${fmtFull(e.created_at)}</td>
+    <td><span class="badge badge-${e.event_type}">${e.event_type}</span></td>
+    <td>${e.agent || '—'}</td>
+    <td class="ctx" title="${summarize(e.context,500)}">${summarize(e.context,80)}</td>
+    <td class="ctx" title="${summarize(e.outcome,500)}">${summarize(e.outcome,80)}</td>
+  </tr>`).join('');
+}
+
+// ========== LOAD ALL ==========
+async function loadAll() {
+  await Promise.all([loadStats(), loadTimeline(), loadAgentChart(), loadAgentPerf(), loadPatterns(), loadEvents()]);
+}
+loadAll();
+setInterval(loadAll, 30000);
+document.getElementById('sel-hours').addEventListener('change', loadTimeline);
+</script>
+</body>
+</html>

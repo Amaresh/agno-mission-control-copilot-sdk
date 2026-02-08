@@ -1,0 +1,19 @@
+[Unit]
+Description=Mission Control MCP Server (SSE on :8001)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/mission-control
+ExecStart=%h/mission-control/.venv/bin/python -m agents.mission_control.mcp.mission_control_server
+Environment=PYTHONPATH=%h/mission-control
+Environment=MCP_PORT=8001
+Environment=MCP_TRANSPORT=sse
+EnvironmentFile=%h/mission-control/.env
+Restart=always
+RestartSec=5
+StandardOutput=append:%h/mission-control/logs/mcp-mission-control.log
+StandardError=append:%h/mission-control/logs/mcp-mission-control.log
+
+[Install]
+WantedBy=default.target

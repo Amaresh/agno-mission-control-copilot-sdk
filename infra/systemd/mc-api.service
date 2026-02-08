@@ -1,0 +1,17 @@
+[Unit]
+Description=Mission Control API Server (FastAPI on :8000)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/mission-control
+ExecStart=%h/mission-control/.venv/bin/python -m uvicorn agents.api:app --host 0.0.0.0 --port 8000
+Environment=PYTHONPATH=%h/mission-control
+EnvironmentFile=%h/mission-control/.env
+Restart=always
+RestartSec=5
+StandardOutput=append:%h/mission-control/logs/api-server.log
+StandardError=append:%h/mission-control/logs/api-server.log
+
+[Install]
+WantedBy=default.target

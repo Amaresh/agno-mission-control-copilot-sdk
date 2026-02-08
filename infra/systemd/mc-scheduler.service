@@ -1,0 +1,18 @@
+[Unit]
+Description=Mission Control Heartbeat Scheduler + Watchdog
+After=network.target mc-mcp.service
+Wants=mc-mcp.service
+
+[Service]
+Type=simple
+WorkingDirectory=%h/mission-control
+ExecStart=%h/mission-control/.venv/bin/python -m agents.scheduler_main
+Environment=PYTHONPATH=%h/mission-control
+EnvironmentFile=%h/mission-control/.env
+Restart=always
+RestartSec=5
+StandardOutput=append:%h/mission-control/logs/scheduler.log
+StandardError=append:%h/mission-control/logs/scheduler.log
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,103 @@
+[project]
+name = "agno-mission-control-copilot"
+version = "0.1.0"
+description = "Autonomous multi-agent AI orchestration system powered by GitHub Copilot SDK and Agno framework"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "Amaresh", email = "ambus1989@gmail.com"}
+]
+keywords = ["ai", "agents", "multi-agent", "copilot-sdk", "agno", "orchestration", "mcp"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+]
+
+dependencies = [
+    # Agent Framework
+    "agno>=0.1.0",
+    "openai>=1.0.0",
+    "mcp>=1.0.0",
+
+    # LLM Providers
+    "ollama>=0.4.0",
+    "groq>=0.4.0",
+
+    # Database
+    "asyncpg>=0.29.0",
+    "pgvector>=0.2.0",
+    "sqlalchemy[asyncio]>=2.0.0",
+    "alembic>=1.13.0",
+
+    # HTTP & API
+    "httpx>=0.27.0",
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+
+    # Scheduler
+    "apscheduler>=3.10.0",
+
+    # Configuration & Validation
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "python-dotenv>=1.0.0",
+
+    # Logging & Monitoring
+    "structlog>=24.1.0",
+    "prometheus-client>=0.19.0",
+
+    # CLI
+    "typer[all]>=0.9.0",
+    "rich>=13.7.0",
+
+    # Telegram
+    "python-telegram-bot>=21.0",
+
+    # Utilities
+    "tenacity>=8.2.0",
+    "aiofiles>=23.2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "black>=24.1.0",
+    "ruff>=0.1.0",
+    "mypy>=1.8.0",
+]
+
+[project.scripts]
+mc = "agents.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["agents"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "I", "N", "W"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_ignores = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+testpaths = ["tests"]
