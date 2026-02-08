@@ -89,6 +89,7 @@ class BaseAgent(ABC):
         # Agent instance (lazy loaded)
         self._agent: Optional[AgnoAgent] = None
         self._mcp_tools: list = []
+        self._repo_scope: Optional[str] = None
 
         self.logger = logger.bind(agent=name)
 
@@ -238,6 +239,11 @@ A helpful and efficient AI agent.
             # Output
             markdown=True,
         )
+
+        # Apply deferred repo scope (set_repo_scope() may have been called
+        # before _init_agent, so propagate the persisted scope now).
+        if self._repo_scope:
+            self.set_repo_scope(self._repo_scope)
 
         return agent
 
@@ -401,7 +407,14 @@ You are running as a headless agent WITHOUT local filesystem access.
         return self._agent
 
     def set_repo_scope(self, repo: Optional[str]) -> None:
-        """Set (or clear) allowed-repo constraint on MCPTools and CopilotModel."""
+        """Set (or clear) allowed-repo constraint on MCPTools and CopilotModel.
+
+        The scope is persisted on self._repo_scope so that _init_agent() can
+        apply it when the agent is lazily created (set_repo_scope is often
+        called before run() triggers initialization).
+        """
+        self._repo_scope = repo
+
         from agents.mission_control.mcp.repo_scoped import RepoScopedMCPTools
 
         for t in self._mcp_tools:
