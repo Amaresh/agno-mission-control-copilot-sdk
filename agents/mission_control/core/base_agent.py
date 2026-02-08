@@ -275,12 +275,13 @@ A helpful and efficient AI agent.
                 "get_file_contents", "search_code", "search_repositories",
                 "search_issues", "list_commits", "get_commit",
                 "list_branches",
-                # Issues & PRs (read + create/comment — no repo file writes)
+                # Issues & PRs (read + create/comment)
                 "list_issues", "get_issue", "create_issue", "add_issue_comment",
                 "list_pull_requests", "get_pull_request", "get_pull_request_diff",
                 "create_pull_request", "add_pull_request_review_comment",
-                # Explicitly excluded: create_or_update_file, push_files,
-                # create_repository, delete_file, fork_repository, create_branch
+                # Branch & file writes (required for task execution)
+                "create_branch", "create_or_update_file",
+                # Excluded: push_files, create_repository, delete_file, fork_repository
             ]
             mcp_servers["github"] = {
                 "type": "local",
