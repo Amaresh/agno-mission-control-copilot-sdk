@@ -40,6 +40,7 @@ _GITHUB_WRITE_TOOLS = frozenset({
     "create_or_update_file",
     "push_files",
     "delete_file",
+    "create_pull_request",
 })
 
 
