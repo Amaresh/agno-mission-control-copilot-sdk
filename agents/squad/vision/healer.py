@@ -13,10 +13,9 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import structlog
-from sqlalchemy import select
-
 from agents.squad.vision.checks import HealthCheckResult, run_all_checks
 from agents.squad.vision.notify import notify_human
+from sqlalchemy import select
 
 logger = structlog.get_logger()
 
@@ -36,10 +35,12 @@ class VisionHealer:
     async def _record_heartbeat(self):
         """Persist last_heartbeat timestamp so the watchdog doesn't flag Vision as stale."""
         from agents.mission_control.core.database import (
-            AsyncSessionLocal,
-            Agent as AgentModel,
             Activity,
             ActivityType,
+            AsyncSessionLocal,
+        )
+        from agents.mission_control.core.database import (
+            Agent as AgentModel,
         )
 
         try:
