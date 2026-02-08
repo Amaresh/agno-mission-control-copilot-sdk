@@ -46,7 +46,7 @@ _GITHUB_WRITE_TOOLS = frozenset({
 
 def _audit_write_tool(
     tool_name: str,
-    data_attrs: dict,
+    event_data: Any,
     allowed_owner: Optional[str],
     allowed_repo: Optional[str],
 ) -> None:
@@ -56,20 +56,33 @@ def _audit_write_tool(
     primary gate that strips write tools when no repo scope is set.  This
     function catches cases where a scoped session still targets a
     different repository than the one allowed.
+
+    Accepts the raw SDK event.data object so arguments are not
+    pre-stringified or truncated.
     """
     import json as _json
 
     target_owner = None
     target_repo = None
-    # Tool arguments may be in a JSON 'arguments' field or top-level attrs
-    raw_args = data_attrs.get("arguments") or data_attrs.get("input", "")
-    if isinstance(raw_args, str):
+
+    # Extract raw arguments — may be a dict, JSON string, or absent
+    raw_args = (
+        getattr(event_data, 'arguments', None)
+        or getattr(event_data, 'input', None)
+    )
+    if isinstance(raw_args, dict):
+        target_owner = str(raw_args.get("owner", "")).lower()
+        target_repo = str(raw_args.get("repo", "")).lower()
+    elif isinstance(raw_args, str):
         try:
             parsed = _json.loads(raw_args)
-            target_owner = parsed.get("owner", "").lower()
-            target_repo = parsed.get("repo", "").lower()
-        except (ValueError, AttributeError):
-            pass
+            target_owner = str(parsed.get("owner", "")).lower()
+            target_repo = str(parsed.get("repo", "")).lower()
+        except (ValueError, AttributeError, TypeError):
+            logger.debug(
+                "Could not parse write-tool arguments for audit",
+                tool=tool_name,
+            )
 
     if not target_owner or not target_repo:
         return  # Can't determine target; nothing to audit
@@ -389,7 +402,7 @@ class CopilotModel(Model):
                 # different repo than the one allowed.
                 if tool_name in _GITHUB_WRITE_TOOLS:
                     _audit_write_tool(
-                        tool_name, data_attrs,
+                        tool_name, event.data,
                         self._allowed_owner, self._allowed_repo,
                     )
 
