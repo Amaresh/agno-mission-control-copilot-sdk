@@ -8,7 +8,7 @@ Usage: python -m agents.scheduler_main
 """
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import structlog
 from sqlalchemy import select
@@ -19,8 +19,10 @@ from agents.mission_control.scheduler.heartbeat import get_scheduler
 
 logger = structlog.get_logger()
 
-# Watchdog: alert if ANY agent's heartbeat is older than this
-WATCHDOG_STALE_MINUTES = 30
+# Watchdog: alert if an agent's heartbeat exceeds its expected interval
+# plus a grace period.  Agents on a 15-min schedule get 20 min;
+# hourly agents (like Vision) get 65 min.
+WATCHDOG_GRACE_MINUTES = 5
 
 
 async def _check_heartbeat_health():
@@ -28,35 +30,24 @@ async def _check_heartbeat_health():
     from agents.mission_control.core.database import Agent as AgentModel
     from agents.mission_control.core.database import AsyncSessionLocal
 
-    # Vision runs hourly — use a longer stale threshold to avoid false alarms
-    HOURLY_AGENTS = {"vision"}
-    HOURLY_STALE_MINUTES = 75  # 1 hour + 15 min grace
-
     try:
         async with AsyncSessionLocal() as session:
-            cutoff = datetime.now(timezone.utc) - timedelta(minutes=WATCHDOG_STALE_MINUTES)
-            hourly_cutoff = datetime.now(timezone.utc) - timedelta(minutes=HOURLY_STALE_MINUTES)
-            result = await session.execute(
-                select(AgentModel).where(
-                    (AgentModel.last_heartbeat < cutoff) | (AgentModel.last_heartbeat.is_(None))
-                )
-            )
-            stale_agents = result.scalars().all()
+            result = await session.execute(select(AgentModel))
+            all_agents = result.scalars().all()
 
-            # Filter out hourly agents that are within their own threshold
-            truly_stale = []
-            for a in stale_agents:
-                if a.name.lower() in HOURLY_AGENTS:
-                    # Only flag if stale beyond the hourly threshold
-                    if a.last_heartbeat is None or a.last_heartbeat < hourly_cutoff:
-                        truly_stale.append(a)
-                else:
-                    truly_stale.append(a)
+            now = datetime.now(timezone.utc)
+            stale_agents = []
+            for a in all_agents:
+                # Vision runs hourly; all others run every 15 min
+                interval = 60 if a.name.lower() == "vision" else 15
+                threshold = interval + WATCHDOG_GRACE_MINUTES
+                if a.last_heartbeat is None or (now - a.last_heartbeat).total_seconds() > threshold * 60:
+                    stale_agents.append((a.name, threshold))
 
-            if not truly_stale:
+            if not stale_agents:
                 return
 
-            names = [a.name for a in truly_stale]
+            names = [name for name, _ in stale_agents]
             logger.warning("Stale heartbeats detected", agents=names)
 
             # Send Telegram alert
@@ -65,9 +56,9 @@ async def _check_heartbeat_health():
             if chat_id and bot_token:
                 import httpx
                 message = (
-                    f"⚠️ *Heartbeat Watchdog Alert*\n\n"
-                    f"The following agents have not sent a heartbeat in {WATCHDOG_STALE_MINUTES}+ minutes:\n"
-                    + "\n".join(f"• {n}" for n in names)
+                    "⚠️ *Heartbeat Watchdog Alert*\n\n"
+                    "The following agents have stale heartbeats:\n"
+                    + "\n".join(f"• {n} (>{t}min)" for n, t in stale_agents)
                     + f"\n\nTime: {datetime.now(timezone.utc).strftime('%H:%M UTC')}"
                 )
                 async with httpx.AsyncClient() as client:
@@ -111,7 +102,7 @@ async def _run():
         name="Heartbeat Watchdog",
         replace_existing=True,
     )
-    logger.info("Registered heartbeat watchdog", interval="10min", stale_threshold=f"{WATCHDOG_STALE_MINUTES}min")
+    logger.info("Registered heartbeat watchdog", interval="10min", grace_minutes=WATCHDOG_GRACE_MINUTES)
 
     # Add daily standup job at 18:00 UTC (11:30 PM IST)
     chat_id = settings.telegram_chat_id
