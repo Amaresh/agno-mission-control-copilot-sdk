@@ -4,11 +4,10 @@ Learning capture module for agent event tracking.
 
 import uuid
 from datetime import datetime, timezone
-from typing import Optional, Any
+from typing import Any, Optional
 
 import structlog
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from agents.mission_control.core.database import (
     AsyncSessionLocal,

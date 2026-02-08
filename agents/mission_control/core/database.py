@@ -5,28 +5,27 @@ Database models and connection management for Mission Control.
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Optional, List
+from typing import Optional
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
-    Column,
+    JSON,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
     String,
     Text,
-    Boolean,
-    Float,
-    Integer,
-    DateTime,
-    ForeignKey,
-    JSON,
-    Enum as SQLEnum,
-    create_engine,
 )
-from sqlalchemy.dialects.postgresql import UUID, ARRAY
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
-from sqlalchemy.orm import DeclarativeBase, relationship, Mapped, mapped_column
-from pgvector.sqlalchemy import Vector
+from sqlalchemy import (
+    Enum as SQLEnum,
+)
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from agents.config import settings
-
 
 # ===========================================
 # Enums

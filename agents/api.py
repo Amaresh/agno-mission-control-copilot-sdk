@@ -290,7 +290,7 @@ async def dashboard_tasks():
         hb_rows = (await session.execute(
             select(AgentModel.name, AgentModel.last_heartbeat)
         )).all()
-        last_hb = {name: hb for name, hb in hb_rows}
+        {name: hb for name, hb in hb_rows}
 
         # Pre-fetch: queue positions — all assigned tasks per agent ordered by created_at
         queue_rows = (await session.execute(
@@ -489,7 +489,7 @@ async def learning_stats():
             select(func.count()).select_from(LearningEvent)
             .where(
                 LearningEvent.event_type == "task_outcome",
-                LearningEvent.outcome["success"].as_boolean() == True,
+                LearningEvent.outcome["success"].as_boolean(),
             )
         )).scalar() or 0
 
@@ -564,7 +564,7 @@ async def learning_agent_metrics():
                 AgentModel.name,
                 func.count(),
                 func.sum(case(
-                    (LearningEvent.outcome["success"].as_boolean() == True, 1),
+                    (LearningEvent.outcome["success"].as_boolean(), 1),
                     else_=0,
                 )),
                 func.avg(LearningEvent.outcome["duration_seconds"].as_float()),

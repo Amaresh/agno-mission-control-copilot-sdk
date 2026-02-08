@@ -89,8 +89,17 @@ target-version = ["py311"]
 
 [tool.ruff]
 line-length = 100
+
+[tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]
-ignore = ["E501"]
+ignore = [
+    "E501",  # line too long — handled by formatter
+    "E402",  # module-level import not at top — deferred imports by design (MCP server, test fixtures)
+    "E712",  # comparison to True/False — required for SQLAlchemy column expressions
+    "E741",  # ambiguous variable name 'l' — used in git status line parsing
+    "N806",  # variable in function should be lowercase — intentional constants and class refs
+    "F821",  # undefined name — forward reference type hints
+]
 
 [tool.mypy]
 python_version = "3.11"

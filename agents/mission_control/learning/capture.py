@@ -11,15 +11,16 @@ internally so they never crash the calling agent.
 
 import uuid
 from datetime import datetime, timezone
-from typing import Optional, Any
+from typing import Any, Optional
 
 import structlog
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from agents.mission_control.core.database import (
-    AsyncSessionLocal,
     Agent as AgentModel,
+)
+from agents.mission_control.core.database import (
+    AsyncSessionLocal,
     LearningEvent,
     LearningPattern,
     LearningType,
@@ -224,7 +225,7 @@ async def get_relevant_patterns(
 
     TODO: Implement vector similarity search with pgvector for richer recall.
     """
-    from sqlalchemy import case, func, literal
+    from sqlalchemy import case, func
 
     async with AsyncSessionLocal() as session:
         # Extract meaningful keywords (>= 3 chars, lowercased)

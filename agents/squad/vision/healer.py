@@ -9,13 +9,12 @@ Reports issues via Telegram + GitHub Issue.
 """
 
 import asyncio
-import subprocess
 from datetime import datetime, timezone
 from typing import Optional
 
 import structlog
 
-from agents.squad.vision.checks import run_all_checks, HealthCheckResult
+from agents.squad.vision.checks import HealthCheckResult, run_all_checks
 from agents.squad.vision.notify import notify_human
 
 logger = structlog.get_logger()
@@ -24,7 +23,7 @@ logger = structlog.get_logger()
 class VisionHealer:
     """
     System healer that runs deterministic health checks.
-    
+
     Not a BaseAgent subclass — it doesn't need LLM, MCP tools,
     or Agno sessions. It's a pure ops agent.
     """
@@ -36,7 +35,7 @@ class VisionHealer:
     async def heartbeat(self) -> str:
         """
         Run all health checks. Called by the scheduler every hour.
-        
+
         Returns:
             Summary string of check results
         """
@@ -61,7 +60,7 @@ class VisionHealer:
 
         # Notify human if any fixes were applied or critical issues found
         critical = [r for r in failures if r.severity == "critical"]
-        
+
         if fixes or critical:
             await self._report_to_human(results, failures, fixes, duration)
 
@@ -77,7 +76,7 @@ class VisionHealer:
     ):
         """Send alert to human about issues found/fixed."""
         lines = []
-        
+
         for r in failures:
             prefix = "🔧" if r.fix_applied else "❌"
             line = f"{prefix} **{r.name}**: {r.message}"
@@ -117,7 +116,7 @@ class VisionHealer:
     async def run_copilot_fix(self, description: str, working_dir: str) -> Optional[str]:
         """
         Shell out to Copilot CLI with GPT-4.1 for code fixes.
-        
+
         Uses the same model as the rest of Mission Control (free tier).
         Only called when a health check identifies a code-level issue
         that can't be fixed by DB updates or service restarts.

@@ -8,12 +8,10 @@ like creating tasks, listing tasks, delegating work, etc.
 Run standalone: python -m agents.mission_control.mcp.mission_control_server
 """
 
-import asyncio
 import json
 import logging
 import os
 import sys
-from typing import Optional
 
 # Ensure project root is in path for imports
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -41,8 +39,8 @@ mcp = FastMCP("mission-control", host="127.0.0.1", port=MCP_PORT)
 # Tool usage capture wrapper
 # ============================================================================
 
-import time
 import functools
+import time
 
 
 def _capture_tool(fn):
@@ -99,36 +97,39 @@ async def create_task(
 ) -> str:
     """
     Create a new task in Mission Control and optionally assign it to agents.
-    
+
     Args:
         title: The task title (required)
         description: Detailed description of the task
         assignees: Comma-separated agent names to assign (e.g., "friday,shuri")
         priority: Task priority - low, medium, high, or critical
-        repository: Target GitHub repository (e.g., "owner/repo-name"). 
+        repository: Target GitHub repository (e.g., "owner/repo-name").
                     REQUIRED. You MUST specify which repo the work targets.
                     Ask the human if you don't know which repository to use.
-    
+
     Returns:
         Confirmation message with task details
     """
+    from sqlalchemy import select
+
     from agents.mission_control.core.database import (
-        AsyncSessionLocal,
-        Task,
-        TaskStatus,
-        TaskPriority,
-        TaskAssignment,
         Activity,
         ActivityType,
+        AsyncSessionLocal,
+        Task,
+        TaskAssignment,
+        TaskPriority,
+        TaskStatus,
+    )
+    from agents.mission_control.core.database import (
         Agent as AgentModel,
     )
-    from sqlalchemy import select
-    
+
     assignees = assignees or ""
     priority = priority or "medium"
     description = description or ""
     repository = (repository or "").strip()
-    
+
     # ENFORCE: repository is required
     if not repository:
         return (
@@ -136,7 +137,7 @@ async def create_task(
             "You must specify the target GitHub repository (e.g., 'owner/repo-name'). "
             "If you don't know which repo this work targets, ASK THE HUMAN before creating the task."
         )
-    
+
     # Prepend repository context to description if provided
     if repository and "Repository:" not in description:
         description = f"Repository: {repository}\n\n{description}".strip()
@@ -166,7 +167,7 @@ async def create_task(
 
     if len(assignee_list) > 3:
         return f"⚠️ Max 3 agents per task. You listed {len(assignee_list)}: {', '.join(assignee_list)}. Pick the most relevant specialists."
-    
+
     async with AsyncSessionLocal() as session:
         # Prevent duplicate tasks with the same title
         existing = await session.execute(
@@ -183,7 +184,7 @@ async def create_task(
         )
         session.add(task)
         await session.flush()
-        
+
         assigned_agents = []
         for agent_name in assignee_list:
             result = await session.execute(
@@ -194,7 +195,7 @@ async def create_task(
                 assignment = TaskAssignment(task_id=task.id, agent_id=agent.id)
                 session.add(assignment)
                 assigned_agents.append(agent.name)
-        
+
         activity = Activity(
             type=ActivityType.TASK_CREATED,
             task_id=task.id,
@@ -202,7 +203,7 @@ async def create_task(
         )
         session.add(activity)
         await session.commit()
-        
+
         repo_label = f"\nRepository: {repository}" if repository else ""
         if assigned_agents:
             return f"✅ Task created: '{title}' (ID: {str(task.id)[:8]})\nAssigned to: {', '.join(assigned_agents)}\nPriority: {priority}{repo_label}"
@@ -218,42 +219,42 @@ async def list_tasks(
 ) -> str:
     """
     List tasks in Mission Control, optionally filtered by status.
-    
+
     Args:
         status: Filter by status - all, inbox, assigned, in_progress, review, done, blocked
         limit: Maximum number of tasks to return (default 10)
-    
+
     Returns:
         Formatted list of tasks with their status and assignees
     """
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+
     from agents.mission_control.core.database import (
         AsyncSessionLocal,
         Task,
-        TaskStatus,
         TaskAssignment,
-        Agent as AgentModel,
+        TaskStatus,
     )
-    from sqlalchemy import select
-    from sqlalchemy.orm import selectinload
-    
+
     async with AsyncSessionLocal() as session:
         query = select(Task).options(
             selectinload(Task.assignments).selectinload(TaskAssignment.agent)
         ).order_by(Task.created_at.desc()).limit(limit)
-        
+
         if status and status.lower() != "all":
             try:
                 task_status = TaskStatus(status.lower())
                 query = query.where(Task.status == task_status)
             except ValueError:
                 pass
-        
+
         result = await session.execute(query)
         tasks = result.scalars().all()
-        
+
         if not tasks:
             return f"📋 No tasks found with status: {status}"
-        
+
         lines = [f"📋 **Tasks ({status})**\n"]
         for task in tasks:
             assignees = [a.agent.name for a in task.assignments if a.agent]
@@ -271,7 +272,7 @@ async def list_tasks(
             if task.description:
                 lines.append(f"   {task.description[:100]}...")
             lines.append("")
-        
+
         return "\n".join(lines)
 
 
@@ -280,31 +281,34 @@ async def list_tasks(
 async def list_agents() -> str:
     """
     List all agents in the Mission Control squad with their roles and current status.
-    
+
     Returns:
         Formatted list of agents with their roles and status
     """
+    from sqlalchemy import select
+
     from agents.mission_control.core.database import (
-        AsyncSessionLocal,
         Agent as AgentModel,
     )
-    from sqlalchemy import select
-    
+    from agents.mission_control.core.database import (
+        AsyncSessionLocal,
+    )
+
     async with AsyncSessionLocal() as session:
         result = await session.execute(select(AgentModel).order_by(AgentModel.name))
         agents = result.scalars().all()
-        
+
         if not agents:
             return "🤖 No agents found in the squad"
-        
+
         lines = ["🤖 **Mission Control Squad**\n"]
         for agent in agents:
             status_emoji = "🟢" if agent.status == "active" else "🔴"
             lines.append(f"{status_emoji} **{agent.name}** - {agent.role}")
             if agent.current_task_id:
-                lines.append(f"   Currently working on a task")
+                lines.append("   Currently working on a task")
             lines.append("")
-        
+
         return "\n".join(lines)
 
 
@@ -325,17 +329,20 @@ async def assign_task(
     Returns:
         Confirmation that the agent was assigned
     """
+    from sqlalchemy import select
+
     from agents.mission_control.core.database import (
-        AsyncSessionLocal,
-        Task,
-        TaskStatus,
-        Agent as AgentModel,
-        TaskAssignment,
-        Notification,
         Activity,
         ActivityType,
+        AsyncSessionLocal,
+        Notification,
+        Task,
+        TaskAssignment,
+        TaskStatus,
     )
-    from sqlalchemy import select
+    from agents.mission_control.core.database import (
+        Agent as AgentModel,
+    )
 
     async with AsyncSessionLocal() as session:
         # Find task
@@ -409,32 +416,35 @@ async def delegate_to_agent(
     """
     Send a message or delegate work to another agent in the squad.
     Creates a notification that the target agent will receive in their next heartbeat.
-    
+
     Args:
         agent_name: Name of the agent to delegate to (e.g., "friday", "shuri")
         message: The message or task details to send
-    
+
     Returns:
         Confirmation that the delegation was sent
     """
+    from sqlalchemy import select
+
+    from agents.mission_control.core.database import (
+        Agent as AgentModel,
+    )
     from agents.mission_control.core.database import (
         AsyncSessionLocal,
-        Agent as AgentModel,
         Notification,
     )
-    from sqlalchemy import select
-    
+
     async with AsyncSessionLocal() as session:
         result = await session.execute(
             select(AgentModel).where(AgentModel.name.ilike(agent_name))
         )
         target_agent = result.scalar_one_or_none()
-        
+
         if not target_agent:
             available = await session.execute(select(AgentModel.name))
             names = [r[0] for r in available.fetchall()]
             return f"❌ Agent '{agent_name}' not found. Available: {', '.join(names)}"
-        
+
         # Create notification directly (Message model requires task_id/from_agent_id)
         notification = Notification(
             mentioned_agent_id=target_agent.id,
@@ -442,7 +452,7 @@ async def delegate_to_agent(
         )
         session.add(notification)
         await session.commit()
-        
+
         return f"📨 Message sent to {target_agent.name}. They will receive it in their next heartbeat."
 
 
@@ -454,36 +464,37 @@ async def update_task_status(
 ) -> str:
     """
     Update the status of an existing task.
-    
+
     Args:
         task_title: The title (or partial title) of the task to update
         new_status: New status - inbox, assigned, in_progress, review, done, blocked
-    
+
     Returns:
         Confirmation of the status change
     """
+    from sqlalchemy import select
+
     from agents.mission_control.core.database import (
+        Activity,
+        ActivityType,
         AsyncSessionLocal,
         Task,
         TaskStatus,
-        Activity,
-        ActivityType,
     )
-    from sqlalchemy import select
-    
+
     async with AsyncSessionLocal() as session:
         result = await session.execute(
             select(Task).where(Task.title.ilike(f"%{task_title}%"))
         )
         tasks = result.scalars().all()
-        
+
         if not tasks:
             return f"❌ No task found matching: '{task_title}'"
-        
+
         if len(tasks) > 1:
             titles = "\n".join(f"  • {t.title}" for t in tasks)
             return f"⚠️ Multiple tasks match '{task_title}':\n{titles}\nPlease use a more specific title."
-        
+
         task = tasks[0]
         try:
             old_status = task.status
@@ -493,7 +504,7 @@ async def update_task_status(
                 return f"ℹ️ Task '{task.title}' is already {old_status.value}. No change made."
 
             task.status = new
-            
+
             activity = Activity(
                 type=ActivityType.TASK_STATUS_CHANGED,
                 task_id=task.id,
@@ -501,7 +512,7 @@ async def update_task_status(
             )
             session.add(activity)
             await session.commit()
-            
+
             return f"✅ Task '{task.title}' status updated: {old_status.value} → {task.status.value}"
         except ValueError:
             return f"❌ Invalid status '{new_status}'. Valid: inbox, assigned, in_progress, review, done, blocked"
@@ -512,31 +523,33 @@ async def update_task_status(
 async def get_my_tasks(agent_name: str = "jarvis") -> str:
     """
     Get tasks assigned to a specific agent.
-    
+
     Args:
         agent_name: Name of the agent (default: jarvis)
-    
+
     Returns:
         List of tasks assigned to the agent
     """
+    from sqlalchemy import select
+
+    from agents.mission_control.core.database import (
+        Agent as AgentModel,
+    )
     from agents.mission_control.core.database import (
         AsyncSessionLocal,
         Task,
         TaskAssignment,
-        Agent as AgentModel,
     )
-    from sqlalchemy import select
-    from sqlalchemy.orm import selectinload
-    
+
     async with AsyncSessionLocal() as session:
         result = await session.execute(
             select(AgentModel).where(AgentModel.name.ilike(agent_name))
         )
         agent = result.scalar_one_or_none()
-        
+
         if not agent:
             return f"❌ Agent '{agent_name}' not found"
-        
+
         result = await session.execute(
             select(Task)
             .join(TaskAssignment)
@@ -544,10 +557,10 @@ async def get_my_tasks(agent_name: str = "jarvis") -> str:
             .order_by(Task.priority.desc(), Task.created_at.desc())
         )
         tasks = result.scalars().all()
-        
+
         if not tasks:
             return f"📋 No tasks assigned to {agent.name}"
-        
+
         lines = [f"📋 **Tasks for {agent.name}**\n"]
         for task in tasks:
             status_emoji = {
@@ -557,7 +570,7 @@ async def get_my_tasks(agent_name: str = "jarvis") -> str:
             lines.append(f"{status_emoji} **{task.title}** - {task.status.value}")
             if task.description:
                 lines.append(f"   {task.description[:80]}...")
-        
+
         return "\n".join(lines)
 
 
@@ -566,32 +579,33 @@ async def get_my_tasks(agent_name: str = "jarvis") -> str:
 async def delete_task(task_title: str) -> str:
     """
     Delete a task from Mission Control.
-    
+
     Args:
         task_title: The title (or partial title) of the task to delete.
                     If multiple tasks match, all matches are deleted.
-    
+
     Returns:
         Confirmation of the deletion
     """
+    from sqlalchemy import delete, select
+
     from agents.mission_control.core.database import (
+        Activity,
         AsyncSessionLocal,
         Task,
         TaskAssignment,
-        Activity,
     )
-    from sqlalchemy import select, delete
-    
+
     async with AsyncSessionLocal() as session:
         # Find all matching tasks
         result = await session.execute(
             select(Task).where(Task.title.ilike(f"%{task_title}%"))
         )
         tasks = result.scalars().all()
-        
+
         if not tasks:
             return f"❌ No task found matching: '{task_title}'"
-        
+
         deleted_titles = []
         for task in tasks:
             await session.execute(
@@ -602,9 +616,9 @@ async def delete_task(task_title: str) -> str:
             )
             deleted_titles.append(task.title)
             await session.delete(task)
-        
+
         await session.commit()
-        
+
         if len(deleted_titles) == 1:
             return f"🗑️ Task deleted: '{deleted_titles[0]}'"
         return f"🗑️ Deleted {len(deleted_titles)} tasks:\n" + "\n".join(f"  • {t}" for t in deleted_titles)
@@ -630,12 +644,13 @@ async def create_document(
     Returns:
         Confirmation message with document details
     """
+    from sqlalchemy import select
+
     from agents.mission_control.core.database import (
         AsyncSessionLocal,
-        Task,
         Document,
+        Task,
     )
-    from sqlalchemy import select
 
     doc_type = doc_type or "deliverable"
     task_title = task_title or ""
@@ -679,11 +694,12 @@ async def list_documents(
     Returns:
         Formatted list of documents
     """
+    from sqlalchemy import select
+
     from agents.mission_control.core.database import (
         AsyncSessionLocal,
         Document,
     )
-    from sqlalchemy import select
 
     async with AsyncSessionLocal() as session:
         query = select(Document).order_by(Document.created_at.desc()).limit(limit)

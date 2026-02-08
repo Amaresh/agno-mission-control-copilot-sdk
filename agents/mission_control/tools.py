@@ -4,25 +4,26 @@ Tools for Mission Control agents.
 These tools allow agents to create tasks, delegate work, and communicate with each other.
 """
 
-from typing import Optional
 from datetime import datetime, timezone
 
 import structlog
 from agno.tools import tool
+from sqlalchemy import select
 
 from agents.mission_control.core.database import (
-    AsyncSessionLocal,
-    Task,
-    TaskStatus,
-    TaskPriority,
-    TaskAssignment,
-    Notification,
     Activity,
     ActivityType,
-    Agent as AgentModel,
+    AsyncSessionLocal,
     Document,
+    Notification,
+    Task,
+    TaskAssignment,
+    TaskPriority,
+    TaskStatus,
 )
-from sqlalchemy import select
+from agents.mission_control.core.database import (
+    Agent as AgentModel,
+)
 
 logger = structlog.get_logger()
 
@@ -39,23 +40,23 @@ async def create_task(
 ) -> str:
     """
     Create a new task in Mission Control.
-    
+
     Args:
         title: The task title (required)
         description: Detailed description of the task
         assignees: Comma-separated agent names to assign (e.g., "friday,shuri")
         priority: Task priority - low, medium, high, or critical
-    
+
     Returns:
         Confirmation message with task ID
     """
     import json
-    
+
     # Handle None values from LLM
     assignees = assignees or ""
     priority = priority or "medium"
     description = description or ""
-    
+
     # Handle both JSON array format and comma-separated format
     if assignees.startswith("["):
         try:
@@ -64,13 +65,13 @@ async def create_task(
             assignee_list = [a.strip().strip('"[]') for a in assignees.split(",") if a.strip()]
     else:
         assignee_list = [a.strip() for a in assignees.split(",") if a.strip()]
-    
+
     # Clean up any remaining quotes or brackets
     assignee_list = [a.strip().strip('"\'[]') for a in assignee_list if a.strip()]
 
     if len(assignee_list) > 3:
         return f"⚠️ Max 3 agents per task. You listed {len(assignee_list)}: {', '.join(assignee_list)}. Pick the most relevant specialists."
-    
+
     async with AsyncSessionLocal() as session:
         # Prevent duplicate tasks with the same title
         existing = await session.execute(
@@ -88,7 +89,7 @@ async def create_task(
         )
         session.add(task)
         await session.flush()
-        
+
         # Log activity
         activity = Activity(
             type=ActivityType.TASK_CREATED,
@@ -96,7 +97,7 @@ async def create_task(
             message=f"Created task: {title}",
         )
         session.add(activity)
-        
+
         assigned_names = []
         # Assign to agents
         for assignee_name in assignee_list:
@@ -105,7 +106,7 @@ async def create_task(
             )
             result = await session.execute(stmt)
             agent = result.scalar_one_or_none()
-            
+
             if agent:
                 assignment = TaskAssignment(
                     task_id=task.id,
@@ -113,23 +114,23 @@ async def create_task(
                 )
                 session.add(assignment)
                 assigned_names.append(agent.name)
-                
+
                 # Create notification
                 notif = Notification(
                     mentioned_agent_id=agent.id,
                     content=f"You have been assigned: {title}",
                 )
                 session.add(notif)
-        
+
         await session.commit()
-        
+
         logger.info(
             "Task created via tool",
             task_id=str(task.id),
             title=title,
             assignees=assigned_names,
         )
-        
+
         if assigned_names:
             return f"✅ Created task '{title}' (ID: {str(task.id)[:8]}) and assigned to: {', '.join(assigned_names)}"
         else:
@@ -146,30 +147,30 @@ async def list_tasks(
 ) -> str:
     """
     List tasks from Mission Control.
-    
+
     Args:
         status: Filter by status - all, inbox, assigned, in_progress, review, done, blocked
         limit: Maximum number of tasks to return
-    
+
     Returns:
         Formatted list of tasks
     """
     async with AsyncSessionLocal() as session:
         stmt = select(Task).order_by(Task.created_at.desc()).limit(limit)
-        
+
         if status != "all":
             try:
                 status_enum = TaskStatus(status.upper())
                 stmt = stmt.where(Task.status == status_enum)
             except ValueError:
                 pass
-        
+
         result = await session.execute(stmt)
         tasks = result.scalars().all()
-        
+
         if not tasks:
             return "No tasks found."
-        
+
         lines = ["📋 **Tasks:**\n"]
         for t in tasks:
             status_icon = {
@@ -180,9 +181,9 @@ async def list_tasks(
                 TaskStatus.DONE: "✅",
                 TaskStatus.BLOCKED: "🚫",
             }.get(t.status, "❓")
-            
+
             lines.append(f"{status_icon} **{t.title}** [{t.status.value}] - {t.priority.value}")
-        
+
         return "\n".join(lines)
 
 
@@ -193,7 +194,7 @@ async def list_tasks(
 async def list_agents() -> str:
     """
     List all agents in Mission Control.
-    
+
     Returns:
         Formatted list of agents with their roles
     """
@@ -201,15 +202,15 @@ async def list_agents() -> str:
         stmt = select(AgentModel).order_by(AgentModel.name)
         result = await session.execute(stmt)
         agents = result.scalars().all()
-        
+
         if not agents:
             return "No agents found."
-        
+
         lines = ["🤖 **Agent Squad:**\n"]
         for a in agents:
             last_hb = a.last_heartbeat.strftime("%H:%M") if a.last_heartbeat else "never"
             lines.append(f"• **{a.name}** - {a.role} (last heartbeat: {last_hb})")
-        
+
         return "\n".join(lines)
 
 
@@ -292,11 +293,11 @@ async def delegate_to_agent(
 ) -> str:
     """
     Delegate work to another agent by creating a notification.
-    
+
     Args:
         agent_name: Name of the agent to delegate to (e.g., "friday", "shuri")
         message: The message or request to send to the agent
-    
+
     Returns:
         Confirmation that the delegation was created
     """
@@ -306,17 +307,17 @@ async def delegate_to_agent(
         )
         result = await session.execute(stmt)
         agent = result.scalar_one_or_none()
-        
+
         if not agent:
             return f"❌ Agent '{agent_name}' not found. Available agents: Jarvis, Friday, Vision, Wong, Shuri, Fury, Pepper"
-        
+
         # Create notification
         notif = Notification(
             mentioned_agent_id=agent.id,
             content=message,
         )
         session.add(notif)
-        
+
         # Log activity
         activity = Activity(
             type=ActivityType.MESSAGE_SENT,
@@ -324,15 +325,15 @@ async def delegate_to_agent(
             message=f"Delegated to {agent.name}: {message[:100]}",
         )
         session.add(activity)
-        
+
         await session.commit()
-        
+
         logger.info(
             "Delegated to agent",
             target_agent=agent.name,
             message_preview=message[:50],
         )
-        
+
         return f"✅ Delegated to {agent.name}. They will pick this up on their next heartbeat."
 
 
@@ -346,11 +347,11 @@ async def update_task_status(
 ) -> str:
     """
     Update a task's status.
-    
+
     Args:
         task_title: Title (or part of title) of the task to update
         new_status: New status - inbox, assigned, in_progress, review, done, blocked
-    
+
     Returns:
         Confirmation of the status change
     """
@@ -358,13 +359,13 @@ async def update_task_status(
         stmt = select(Task).where(
             Task.title.ilike(f"%{task_title}%")
         ).order_by(Task.created_at.desc()).limit(1)
-        
+
         result = await session.execute(stmt)
         task = result.scalar_one_or_none()
-        
+
         if not task:
             return f"❌ No task found matching '{task_title}'"
-        
+
         try:
             old_status = task.status
             new = TaskStatus(new_status.upper())
@@ -402,7 +403,7 @@ async def update_task_status(
 
             task.status = new
             task.updated_at = datetime.now(timezone.utc)
-            
+
             # Log activity
             activity = Activity(
                 type=ActivityType.TASK_STATUS_CHANGED,
@@ -410,9 +411,9 @@ async def update_task_status(
                 message=f"Status changed: {old_status.value} → {task.status.value}",
             )
             session.add(activity)
-            
+
             await session.commit()
-            
+
             return f"✅ Task '{task.title}' status updated: {old_status.value} → {task.status.value}"
         except ValueError:
             return f"❌ Invalid status '{new_status}'. Valid options: inbox, assigned, in_progress, review, done, blocked"

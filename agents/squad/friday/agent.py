@@ -11,12 +11,14 @@ from sqlalchemy import select
 
 from agents.mission_control.core.base_agent import BaseAgent
 from agents.mission_control.core.database import (
-    AsyncSessionLocal,
-    Task,
-    TaskStatus,
-    TaskAssignment,
     Agent as AgentModel,
+)
+from agents.mission_control.core.database import (
+    AsyncSessionLocal,
     Notification,
+    Task,
+    TaskAssignment,
+    TaskStatus,
 )
 
 logger = structlog.get_logger()
@@ -56,7 +58,7 @@ class FridayAgent(BaseAgent):
             # Check for notifications
             stmt = select(Notification).where(
                 Notification.mentioned_agent_id == agent.id,
-                Notification.delivered == False,
+                not Notification.delivered,
             ).order_by(Notification.created_at.asc()).limit(3)
 
             result = await session.execute(stmt)

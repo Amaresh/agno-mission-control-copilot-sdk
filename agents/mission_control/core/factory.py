@@ -8,7 +8,6 @@ from typing import Optional
 import structlog
 
 from agents.mission_control.core.base_agent import BaseAgent
-from agents.mission_control.mcp.manager import MCPManager
 
 logger = structlog.get_logger()
 
@@ -126,13 +125,16 @@ class GenericAgent(BaseAgent):
     async def _check_for_work(self) -> Optional[dict]:
         """Check for pending work during heartbeat."""
         from sqlalchemy import select
+
+        from agents.mission_control.core.database import (
+            Agent as AgentModel,
+        )
         from agents.mission_control.core.database import (
             AsyncSessionLocal,
-            Task,
-            TaskStatus,
-            TaskAssignment,
-            Agent as AgentModel,
             Notification,
+            Task,
+            TaskAssignment,
+            TaskStatus,
         )
 
         async with AsyncSessionLocal() as session:
@@ -147,7 +149,7 @@ class GenericAgent(BaseAgent):
             # Check notifications
             stmt = select(Notification).where(
                 Notification.mentioned_agent_id == agent.id,
-                Notification.delivered == False,
+                not Notification.delivered,
             ).limit(3)
 
             result = await session.execute(stmt)
@@ -225,14 +227,17 @@ class GenericAgent(BaseAgent):
     async def _do_work(self, work: dict) -> str:
         """Handle pending work."""
         from sqlalchemy import select
+
         from agents.mission_control.core.database import (
-            AsyncSessionLocal,
-            Task,
-            TaskStatus,
             Activity,
             ActivityType,
-            Agent as AgentModel,
+            AsyncSessionLocal,
             Notification,
+            Task,
+            TaskStatus,
+        )
+        from agents.mission_control.core.database import (
+            Agent as AgentModel,
         )
 
         work_type = work.get("type")
@@ -276,7 +281,7 @@ class GenericAgent(BaseAgent):
                         type=ActivityType.TASK_STATUS_CHANGED,
                         agent_id=task_id,  # will be set below
                         task_id=task.id,
-                        message=f"Status: assigned → in_progress",
+                        message="Status: assigned → in_progress",
                     )
                     # Get agent id for activity
                     agent_result = await session.execute(
@@ -387,7 +392,7 @@ class GenericAgent(BaseAgent):
                                 select(AgentModel).where(AgentModel.name == self.name)
                             )
                             agent_record = agent_result.scalar_one_or_none()
-                            msg = f"Status: in_progress → review"
+                            msg = "Status: in_progress → review"
                             if response:
                                 msg += f". Agent output: {response[:200]}"
                             activity = Activity(
@@ -405,7 +410,11 @@ class GenericAgent(BaseAgent):
         elif work_type == "review_tasks":
             tasks = work.get("tasks", [])
             import uuid as _uuid
-            from agents.mission_control.core.pr_check import extract_target_repo, has_open_pr_for_task
+
+            from agents.mission_control.core.pr_check import (
+                extract_target_repo,
+                has_open_pr_for_task,
+            )
 
             done_count = 0
             assigned_count = 0
@@ -435,7 +444,7 @@ class GenericAgent(BaseAgent):
                         activity = Activity(
                             type=ActivityType.TASK_STATUS_CHANGED,
                             task_id=task.id,
-                            message=f"Status: review → done (PR verified by reviewer)",
+                            message="Status: review → done (PR verified by reviewer)",
                         )
                         session.add(activity)
                         done_count += 1
@@ -445,7 +454,7 @@ class GenericAgent(BaseAgent):
                         activity = Activity(
                             type=ActivityType.TASK_STATUS_CHANGED,
                             task_id=task.id,
-                            message=f"Status: review → assigned (no matching PR found)",
+                            message="Status: review → assigned (no matching PR found)",
                         )
                         session.add(activity)
                         assigned_count += 1

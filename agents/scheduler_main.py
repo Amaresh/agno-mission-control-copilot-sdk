@@ -8,11 +8,10 @@ Usage: python -m agents.scheduler_main
 """
 
 import asyncio
-import os
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
 import structlog
-from sqlalchemy import select, func
+from sqlalchemy import select
 
 from agents.config import settings
 from agents.mission_control.core.factory import AgentFactory
@@ -26,7 +25,8 @@ WATCHDOG_STALE_MINUTES = 30
 
 async def _check_heartbeat_health():
     """Watchdog: alert human via Telegram if heartbeats go stale."""
-    from agents.mission_control.core.database import AsyncSessionLocal, Agent as AgentModel
+    from agents.mission_control.core.database import Agent as AgentModel
+    from agents.mission_control.core.database import AsyncSessionLocal
 
     # Vision runs hourly — use a longer stale threshold to avoid false alarms
     HOURLY_AGENTS = {"vision"}
@@ -120,8 +120,9 @@ async def _run():
     if chat_id and bot_token:
         async def _scheduled_standup():
             try:
-                from agents.squad.jarvis.agent import create_jarvis
                 import httpx
+
+                from agents.squad.jarvis.agent import create_jarvis
                 jarvis = create_jarvis()
                 summary = await jarvis.generate_daily_standup()
                 async with httpx.AsyncClient() as client:

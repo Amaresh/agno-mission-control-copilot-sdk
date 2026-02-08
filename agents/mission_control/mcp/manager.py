@@ -8,9 +8,8 @@ SSE mode (default): Connects to pre-running MCP servers via URL.
 Stdio mode (fallback): Spawns subprocess per connection.
 """
 
-import os
-from typing import Optional
 from dataclasses import dataclass
+from typing import Optional
 
 import structlog
 from agno.tools.mcp import MCPTools
@@ -105,7 +104,7 @@ class MCPManager:
 
     async def get_tools_for_agent(self, server_names: list[str]) -> list[MCPTools]:
         """Get MCP tools for an agent based on their assigned servers.
-        
+
         Prefers SSE connection to persistent server when available,
         falls back to stdio subprocess spawn.
         """

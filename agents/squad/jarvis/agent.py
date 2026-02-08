@@ -5,23 +5,24 @@ Primary interface with humans via Telegram.
 Coordinates task distribution across the agent squad.
 """
 
-from typing import Optional
 from datetime import datetime, timezone
+from typing import Optional
 
 import structlog
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from agents.mission_control.core.base_agent import BaseAgent
 from agents.mission_control.core.database import (
-    AsyncSessionLocal,
-    Task,
-    TaskStatus,
-    Agent as AgentModel,
-    TaskAssignment,
-    Notification,
     Activity,
     ActivityType,
+    AsyncSessionLocal,
+    Notification,
+    Task,
+    TaskAssignment,
+    TaskStatus,
+)
+from agents.mission_control.core.database import (
+    Agent as AgentModel,
 )
 
 logger = structlog.get_logger()
@@ -61,7 +62,7 @@ class JarvisAgent(BaseAgent):
             # 1. Check for undelivered notifications for THIS agent only
             stmt = select(Notification).where(
                 Notification.mentioned_agent_id == agent.id,
-                Notification.delivered == False
+                not Notification.delivered
             ).order_by(Notification.created_at.asc()).limit(5)
 
             result = await session.execute(stmt)
@@ -79,7 +80,7 @@ class JarvisAgent(BaseAgent):
             # 2. Check for tasks needing review — skip if there's already
             # a pending (undelivered) review notification to avoid duplicates
             stmt = select(Notification).where(
-                Notification.delivered == False,
+                not Notification.delivered,
                 Notification.content.ilike("%review%"),
             ).limit(1)
             result = await session.execute(stmt)
@@ -281,7 +282,7 @@ class JarvisAgent(BaseAgent):
 
         for notif in notifications:
             # Use the agent to process the notification
-            response = await self.run(
+            await self.run(
                 f"You have a notification: {notif['content']}\n\n"
                 "Please review and take appropriate action."
             )
@@ -310,6 +311,7 @@ class JarvisAgent(BaseAgent):
         transitions (it consistently fails to call the right MCP tool).
         """
         import uuid
+
         from agents.mission_control.core.pr_check import extract_target_repo, has_open_pr_for_task
 
         done_count = 0
@@ -342,7 +344,7 @@ class JarvisAgent(BaseAgent):
                     activity = Activity(
                         type=ActivityType.TASK_STATUS_CHANGED,
                         task_id=task.id,
-                        message=f"Status: review → done (PR verified by gatekeeper)",
+                        message="Status: review → done (PR verified by gatekeeper)",
                     )
                     session.add(activity)
                     done_count += 1
@@ -352,7 +354,7 @@ class JarvisAgent(BaseAgent):
                     activity = Activity(
                         type=ActivityType.TASK_STATUS_CHANGED,
                         task_id=task.id,
-                        message=f"Status: review → assigned (no matching PR found)",
+                        message="Status: review → assigned (no matching PR found)",
                     )
                     session.add(activity)
                     assigned_count += 1
@@ -387,8 +389,12 @@ class JarvisAgent(BaseAgent):
     ) -> str:
         """Create a new task and assign to ONE agent (first in list)."""
         from agents.mission_control.core.database import (
-            Task, TaskAssignment, TaskStatus, TaskPriority,
-            Activity, ActivityType
+            Activity,
+            ActivityType,
+            Task,
+            TaskAssignment,
+            TaskPriority,
+            TaskStatus,
         )
 
         # Enforce single assignee
@@ -450,7 +456,7 @@ class JarvisAgent(BaseAgent):
 
     async def generate_daily_standup(self) -> str:
         """Generate daily standup summary."""
-        from agents.mission_control.core.database import Task, Activity
+        from agents.mission_control.core.database import Task
 
         async with AsyncSessionLocal() as session:
             # Get today's activities

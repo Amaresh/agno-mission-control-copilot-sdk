@@ -7,7 +7,6 @@ regardless of whether there are assigned tasks.
 
 import asyncio
 import time
-from typing import Optional
 
 import structlog
 

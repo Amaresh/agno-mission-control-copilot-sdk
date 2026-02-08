@@ -7,8 +7,8 @@ from typing import Optional
 
 import typer
 from rich.console import Console
-from rich.table import Table
 from rich.panel import Panel
+from rich.table import Table
 
 app = typer.Typer(
     name="mc",
@@ -22,7 +22,6 @@ console = Console()
 def status():
     """Show status of all agents and the system."""
     from agents.mission_control.core.factory import AgentFactory
-    from agents.mission_control.scheduler.heartbeat import get_scheduler
 
     console.print(Panel.fit(
         "[bold blue]Mission Control[/bold blue] - Agent Status",
@@ -60,8 +59,9 @@ def init_db():
 @app.command()
 def seed_agents():
     """Seed the database with agent records."""
+    from agents.mission_control.core.database import Agent as AgentModel
+    from agents.mission_control.core.database import AsyncSessionLocal
     from agents.mission_control.core.factory import AGENT_CONFIGS
-    from agents.mission_control.core.database import AsyncSessionLocal, Agent as AgentModel
 
     async def _seed():
         from sqlalchemy import select
@@ -213,6 +213,7 @@ def serve(
 ):
     """Start the HTTP API server for chat interactions."""
     import uvicorn
+
     from agents.api import app as api_app
 
     console.print(Panel.fit(

@@ -243,7 +243,7 @@ A helpful and efficient AI agent.
 
     def _build_copilot_mcp_config(self) -> Dict[str, Any]:
         """Build MCP server config for Copilot SDK sessions.
-        
+
         The Copilot SDK handles tool calls internally via its MCP servers.
         Agno MCPTools are NOT used for tool execution with CopilotModel —
         the SDK discovers and calls tools from these MCP servers directly.
@@ -415,10 +415,10 @@ You are running as a headless agent WITHOUT local filesystem access.
     ) -> str:
         """
         Run the agent with a message and return response.
-        
+
         Enriches each request with relevant learning patterns from the DB
         so the LLM can avoid past mistakes and reuse proven strategies.
-        
+
         Args:
             message: The user message to process
             user_id: Optional user identifier for personalization

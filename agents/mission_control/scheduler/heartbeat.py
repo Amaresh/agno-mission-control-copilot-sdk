@@ -6,13 +6,11 @@ Implements staggered 15-minute heartbeats for all agents.
 
 import asyncio
 from datetime import datetime, timezone
-from typing import Callable, Awaitable
+from typing import Awaitable, Callable
 
 import structlog
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-
-from agents.config import settings
 
 logger = structlog.get_logger()
 
@@ -81,7 +79,7 @@ class HeartbeatScheduler:
         )
 
         self.logger.info(
-            f"Registered agent for heartbeat",
+            "Registered agent for heartbeat",
             agent=agent_name,
             schedule=f":{minutes.replace(',', ', :')}",
         )
@@ -106,7 +104,7 @@ class HeartbeatScheduler:
         )
 
         self.logger.info(
-            f"Registered agent for hourly heartbeat",
+            "Registered agent for hourly heartbeat",
             agent=agent_name,
             schedule=f":{minute_offset} every hour",
         )
@@ -120,7 +118,7 @@ class HeartbeatScheduler:
             self.logger.error(f"No callback registered for agent '{agent_key}'")
             return
 
-        self.logger.info(f"Running heartbeat", agent=agent_key)
+        self.logger.info("Running heartbeat", agent=agent_key)
         start_time = datetime.now(timezone.utc)
 
         try:
@@ -131,7 +129,7 @@ class HeartbeatScheduler:
             duration = (datetime.now(timezone.utc) - start_time).total_seconds()
 
             self.logger.info(
-                f"Heartbeat completed",
+                "Heartbeat completed",
                 agent=agent_key,
                 result=result[:100] if result else "OK",
                 duration_seconds=duration,
@@ -139,14 +137,14 @@ class HeartbeatScheduler:
         except asyncio.TimeoutError:
             duration = (datetime.now(timezone.utc) - start_time).total_seconds()
             self.logger.warning(
-                f"Heartbeat timed out",
+                "Heartbeat timed out",
                 agent=agent_key,
                 timeout=self.HEARTBEAT_TIMEOUT,
                 duration_seconds=duration,
             )
         except Exception as e:
             self.logger.error(
-                f"Heartbeat failed",
+                "Heartbeat failed",
                 agent=agent_key,
                 error=str(e),
             )
