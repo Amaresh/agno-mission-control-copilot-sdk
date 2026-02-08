@@ -274,7 +274,7 @@ A helpful and efficient AI agent.
         # Only added for agents with "github" in their mcp_servers list.
         #
         # IMPORTANT: Agents must NEVER modify the mission-control repo itself.
-        # Write tools (create_branch, create_or_update_file) are included in
+        # Write tools (create_branch, create_or_update_file, create_pull_request) are included in
         # the allowlist but gated by repo-scope enforcement:
         #   - Agno path: RepoScopedMCPTools blocks wrong-repo calls
         #   - SDK path: CopilotModel._scoped_mcp_servers() strips write tools
