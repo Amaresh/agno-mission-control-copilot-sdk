@@ -71,13 +71,13 @@ def _audit_write_tool(
         or getattr(event_data, 'input', None)
     )
     if isinstance(raw_args, dict):
-        target_owner = str(raw_args.get("owner", "")).lower()
-        target_repo = str(raw_args.get("repo", "")).lower()
+        target_owner = (raw_args.get("owner") or "").lower()
+        target_repo = (raw_args.get("repo") or "").lower()
     elif isinstance(raw_args, str):
         try:
             parsed = _json.loads(raw_args)
-            target_owner = str(parsed.get("owner", "")).lower()
-            target_repo = str(parsed.get("repo", "")).lower()
+            target_owner = (parsed.get("owner") or "").lower()
+            target_repo = (parsed.get("repo") or "").lower()
         except (ValueError, AttributeError, TypeError):
             logger.debug(
                 "Could not parse write-tool arguments for audit",
