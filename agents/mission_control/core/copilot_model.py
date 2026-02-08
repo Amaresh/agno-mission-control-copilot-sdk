@@ -393,7 +393,7 @@ class CopilotModel(Model):
                 done_event.set()
             elif etype == SessionEventType.TOOL_EXECUTION_START:
                 tool_name = getattr(event.data, 'tool_name', None) or getattr(event.data, 'name', '?')
-                # Log all event.data attributes for debugging
+                # Full attributes at DEBUG only — may contain file contents / secrets
                 data_attrs = {k: str(v)[:200] for k, v in vars(event.data).items() if not k.startswith('_')} if hasattr(event.data, '__dict__') else str(event.data)[:300]
 
                 # Defense-in-depth: audit write-tool calls against repo scope.
@@ -406,12 +406,17 @@ class CopilotModel(Model):
                         self._allowed_owner, self._allowed_repo,
                     )
 
-                logger.info("Tool call started", tool=tool_name, data=data_attrs)
+                # Minimal INFO log; verbose attrs only at DEBUG to avoid
+                # leaking file contents or secrets into application logs.
+                _safe_keys = {"owner", "repo", "path", "branch", "ref", "query"}
+                safe_summary = {k: v for k, v in data_attrs.items() if k in _safe_keys}
+                logger.info("Tool call started", tool=tool_name, **safe_summary)
+                logger.debug("Tool call detail", tool=tool_name, data=data_attrs)
             elif etype == SessionEventType.TOOL_EXECUTION_COMPLETE:
                 tool_name = getattr(event.data, 'tool_name', None) or getattr(event.data, 'name', '?')
-                # Dump all non-None data attributes to find the result field
                 data_attrs = {k: str(v)[:300] for k, v in vars(event.data).items() if not k.startswith('_') and v is not None} if hasattr(event.data, '__dict__') else str(event.data)[:500]
-                logger.info("Tool call completed", tool=tool_name, data=data_attrs)
+                logger.info("Tool call completed", tool=tool_name)
+                logger.debug("Tool call result", tool=tool_name, data=data_attrs)
             elif etype == SessionEventType.SESSION_ERROR:
                 err = getattr(event.data, 'message', None) or getattr(event.data, 'error', str(event.data))
                 logger.error("Copilot session error", error=err)
