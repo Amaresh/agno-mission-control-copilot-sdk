@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import structlog
+from sqlalchemy import select
 
 from agents.squad.vision.checks import HealthCheckResult, run_all_checks
 from agents.squad.vision.notify import notify_human
@@ -32,6 +33,36 @@ class VisionHealer:
         self.name = "Vision"
         self.logger = logger.bind(agent="Vision", role="Healer")
 
+    async def _record_heartbeat(self):
+        """Persist last_heartbeat timestamp so the watchdog doesn't flag Vision as stale."""
+        from agents.mission_control.core.database import (
+            Activity,
+            ActivityType,
+            AsyncSessionLocal,
+        )
+        from agents.mission_control.core.database import (
+            Agent as AgentModel,
+        )
+
+        try:
+            async with AsyncSessionLocal() as session:
+                stmt = select(AgentModel).where(AgentModel.name == self.name)
+                result = await session.execute(stmt)
+                agent = result.scalar_one_or_none()
+                if agent:
+                    agent.last_heartbeat = datetime.now(timezone.utc)
+                    agent.status = "active"
+                    activity = Activity(
+                        type=ActivityType.AGENT_HEARTBEAT,
+                        agent_id=agent.id,
+                        message=f"{self.name} heartbeat",
+                    )
+                    session.add(activity)
+                    await session.commit()
+                    self.logger.debug("Recorded heartbeat in DB")
+        except Exception as e:
+            self.logger.warning("Failed to record heartbeat", error=str(e))
+
     async def heartbeat(self) -> str:
         """
         Run all health checks. Called by the scheduler every hour.
@@ -41,6 +72,8 @@ class VisionHealer:
         """
         self.logger.info("Vision Healer check starting")
         start = datetime.now(timezone.utc)
+
+        await self._record_heartbeat()
 
         results = await run_all_checks()
 

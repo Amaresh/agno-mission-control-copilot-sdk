@@ -32,6 +32,17 @@ from pydantic import BaseModel
 
 logger = structlog.get_logger(__name__)
 
+# GitHub MCP write tools that require repo-scope enforcement.
+# When no repo scope is active, these are stripped from the session
+# MCP config so the Copilot SDK cannot invoke them.
+_GITHUB_WRITE_TOOLS = frozenset({
+    "create_branch",
+    "create_or_update_file",
+    "push_files",
+    "delete_file",
+    "create_pull_request",
+})
+
 
 # Global session cache: user_id -> (session, sdk_session_id)
 # This preserves SDK session IDs across requests for the same user
@@ -69,6 +80,9 @@ class CopilotModel(Model):
 
     # Current user/session context (set by run())
     _current_user_id: Optional[str] = field(default=None, repr=False)
+    # Repo-scope enforcement (mirrors RepoScopedMCPTools for the SDK path)
+    _allowed_owner: Optional[str] = field(default=None, repr=False)
+    _allowed_repo: Optional[str] = field(default=None, repr=False)
 
     def __post_init__(self):
         """Initialize after dataclass creation."""
@@ -78,6 +92,22 @@ class CopilotModel(Model):
     def set_user_context(self, user_id: str):
         """Set the current user context for session management."""
         self._current_user_id = user_id
+
+    def set_repo_scope(self, allowed_repo: Optional[str]) -> None:
+        """Set (or clear) the allowed target repository for write tools.
+
+        Mirrors RepoScopedMCPTools.set_allowed_repo() but for the Copilot SDK
+        execution path.  When a scope is active, _scoped_mcp_servers() keeps
+        write tools in the session config; when cleared, they are stripped.
+        """
+        if allowed_repo and "/" in allowed_repo:
+            parts = allowed_repo.split("/", 1)
+            self._allowed_owner = parts[0].lower()
+            self._allowed_repo = parts[1].lower()
+            logger.info("CopilotModel repo scope set", allowed=allowed_repo)
+        else:
+            self._allowed_owner = None
+            self._allowed_repo = None
 
     async def _ensure_client(self):
         """Ensure Copilot client is initialized."""
@@ -97,6 +127,36 @@ class CopilotModel(Model):
     def set_mcp_servers(self, servers: Dict[str, Any]):
         """Set MCP servers for Copilot SDK sessions."""
         self.mcp_servers = servers
+
+    def _scoped_mcp_servers(self) -> Optional[Dict[str, Any]]:
+        """Return MCP server config with write tools gated by repo scope.
+
+        When no repo scope is set, GitHub write tools are stripped from the
+        session config so the Copilot SDK cannot invoke them.  This mirrors
+        the RepoScopedMCPTools guard on the Agno MCPTools path.
+        """
+        if not self.mcp_servers:
+            return None
+
+        import copy
+        servers = copy.deepcopy(self.mcp_servers)
+
+        github_cfg = servers.get("github")
+        if github_cfg and "tools" in github_cfg:
+            if not self._allowed_owner or not self._allowed_repo:
+                before = len(github_cfg["tools"])
+                github_cfg["tools"] = [
+                    t for t in github_cfg["tools"]
+                    if t not in _GITHUB_WRITE_TOOLS
+                ]
+                stripped = before - len(github_cfg["tools"])
+                if stripped:
+                    logger.debug(
+                        "Stripped write tools from session (no repo scope)",
+                        removed=stripped,
+                    )
+
+        return servers
 
     async def _get_or_create_session(
         self,
@@ -125,18 +185,17 @@ class CopilotModel(Model):
         if system_message:
             session_config["system_message"] = {"content": system_message}
 
-        # Pass MCP servers for native tool support
-        if self.mcp_servers:
-            session_config["mcp_servers"] = self.mcp_servers
-            logger.debug("Added MCP servers to session",
-                        num_servers=len(self.mcp_servers),
-                        servers=list(self.mcp_servers.keys()))
-            # Log details for debugging
-            for name, config in self.mcp_servers.items():
-                logger.debug("MCP server config",
-                            name=name,
-                            command=config.get("command", "?"),
-                            args=config.get("args", []))
+        # Pass MCP servers with write-tool gating based on repo scope
+        scoped_servers = self._scoped_mcp_servers()
+        if scoped_servers:
+            session_config["mcp_servers"] = scoped_servers
+            logger.debug(
+                "Added MCP servers to session",
+                num_servers=len(scoped_servers),
+                servers=list(scoped_servers.keys()),
+                repo_scope=f"{self._allowed_owner}/{self._allowed_repo}"
+                if self._allowed_owner else "none",
+            )
 
         session = await self._client.create_session(session_config)
         logger.debug("Created Copilot session", user_id=user_id, model=self.id,
