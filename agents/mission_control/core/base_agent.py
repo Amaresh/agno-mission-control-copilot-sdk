@@ -401,12 +401,16 @@ You are running as a headless agent WITHOUT local filesystem access.
         return self._agent
 
     def set_repo_scope(self, repo: Optional[str]) -> None:
-        """Set (or clear) allowed-repo constraint on all RepoScopedMCPTools."""
+        """Set (or clear) allowed-repo constraint on MCPTools and CopilotModel."""
         from agents.mission_control.mcp.repo_scoped import RepoScopedMCPTools
 
         for t in self._mcp_tools:
             if isinstance(t, RepoScopedMCPTools):
                 t.set_allowed_repo(repo)
+
+        # Propagate to CopilotModel so SDK sessions also enforce the scope
+        if self._agent and hasattr(self._agent.model, 'set_repo_scope'):
+            self._agent.model.set_repo_scope(repo)
 
     async def run(
         self,
