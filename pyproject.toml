@@ -1,22 +1,27 @@
 [project]
-name = "agno-mission-control-copilot"
+name = "mission-control"
 version = "0.1.0"
-description = "Autonomous multi-agent AI orchestration system powered by GitHub Copilot SDK and Agno framework"
+description = "Autonomous multi-agent AI orchestration system powered by GitHub Copilot SDK"
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [
     {name = "Amaresh", email = "ambus1989@gmail.com"}
 ]
-keywords = ["ai", "agents", "multi-agent", "copilot-sdk", "agno", "orchestration", "mcp"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Software Development :: Libraries :: Application Frameworks",
 ]
+keywords = ["ai", "agents", "copilot", "mcp", "multi-agent", "automation"]
+
+[project.urls]
+Homepage = "https://github.com/Amaresh/mission-control"
+Repository = "https://github.com/Amaresh/mission-control"
+Issues = "https://github.com/Amaresh/mission-control/issues"
 
 dependencies = [
     # Agent Framework
@@ -30,6 +35,7 @@ dependencies = [
 
     # Database
     "asyncpg>=0.29.0",
+    "aiosqlite>=0.20.0",
     "pgvector>=0.2.0",
     "sqlalchemy[asyncio]>=2.0.0",
     "alembic>=1.13.0",
@@ -61,6 +67,10 @@ dependencies = [
     # Utilities
     "tenacity>=8.2.0",
     "aiofiles>=23.2.0",
+
+    # Workflow engine
+    "python-statemachine>=2.5.0",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
@@ -74,14 +84,18 @@ dev = [
 ]
 
 [project.scripts]
-mc = "agents.cli:app"
+mc = "mission_control.cli:app"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["agents"]
+packages = ["src/mission_control"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/mission_control/defaults" = "mission_control/defaults"
+"src/mission_control/static" = "mission_control/static"
 
 [tool.black]
 line-length = 100
@@ -89,17 +103,8 @@ target-version = ["py311"]
 
 [tool.ruff]
 line-length = 100
-
-[tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]
-ignore = [
-    "E501",  # line too long — handled by formatter
-    "E402",  # module-level import not at top — deferred imports by design (MCP server, test fixtures)
-    "E712",  # comparison to True/False — required for SQLAlchemy column expressions
-    "E741",  # ambiguous variable name 'l' — used in git status line parsing
-    "N806",  # variable in function should be lowercase — intentional constants and class refs
-    "F821",  # undefined name — forward reference type hints
-]
+ignore = ["E501"]
 
 [tool.mypy]
 python_version = "3.11"

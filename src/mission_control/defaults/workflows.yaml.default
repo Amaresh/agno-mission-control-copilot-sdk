@@ -1,0 +1,129 @@
+# Mission Control — Default Workflow Configuration
+# 7 agents, ~5.2 GB RAM. Edit to add/remove agents based on available memory.
+#
+# Memory guide (each agent ≈ 565 MB):
+#   7 agents → ~5.2 GB   (default)
+#   5 agents → ~3.7 GB   (remove 2 specialists)
+#   3 agents → ~2.2 GB   (keep Jarvis, Friday, Vision)
+#   1 agent  → ~0.8 GB   (Jarvis only)
+#
+# To add an agent: copy any specialist block, change name/role/heartbeat_offset.
+# To remove: delete the agent block. No code changes needed.
+
+version: "1.0"
+
+agents:
+  jarvis:
+    name: Jarvis
+    role: Squad Lead / Coordinator
+    level: lead
+    mission: verify
+    heartbeat_offset: 0
+    mcp_servers:
+      - github
+      - telegram
+
+  friday:
+    name: Friday
+    role: Developer
+    level: specialist
+    mission: build
+    heartbeat_offset: 2
+    mcp_servers:
+      - github
+
+  vision:
+    name: Vision
+    role: System Healer / Ops Monitor
+    level: lead
+    agent_class: healer
+    heartbeat_interval: 3600
+    heartbeat_offset: 0
+    mcp_servers: []
+
+  wong:
+    name: Wong
+    role: Documentation
+    level: specialist
+    mission: build
+    heartbeat_offset: 6
+    mcp_servers:
+      - github
+
+  shuri:
+    name: Shuri
+    role: Testing & QA
+    level: specialist
+    mission: build
+    heartbeat_offset: 8
+    mcp_servers:
+      - github
+
+  fury:
+    name: Fury
+    role: Developer
+    level: specialist
+    mission: build
+    heartbeat_offset: 10
+    mcp_servers:
+      - github
+
+  pepper:
+    name: Pepper
+    role: Developer
+    level: specialist
+    mission: build
+    heartbeat_offset: 12
+    mcp_servers:
+      - github
+
+  # Example: infrastructure monitoring agent (requires DigitalOcean token)
+  # quill:
+  #   name: Quill
+  #   role: Infrastructure Ops — DigitalOcean Monitor
+  #   level: specialist
+  #   mission: build
+  #   heartbeat_offset: 16
+  #   mcp_servers:
+  #     - digitalocean
+  #   always_run:
+  #     prompt: |
+  #       Run your infrastructure monitoring checklist NOW.
+  #       Use your DigitalOcean MCP tools to check all apps, databases, droplets.
+  #       Write a health summary. Report issues with severity.
+  #     timeout: 60
+
+missions:
+  build:
+    description: "Developer workflow: branch → code → PR"
+    initial_state: ASSIGNED
+    default_config:
+      source_branch: main
+    transitions:
+      - from: ASSIGNED
+        to: IN_PROGRESS
+      - from: IN_PROGRESS
+        to: REVIEW
+        guard: has_open_pr
+      - from: IN_PROGRESS
+        to: ASSIGNED
+        guard: has_error
+
+  verify:
+    description: "Review workflow: check PR exists → approve or reject"
+    initial_state: REVIEW
+    transitions:
+      - from: REVIEW
+        to: DONE
+        guard: has_open_pr
+      - from: REVIEW
+        to: ASSIGNED
+        guard: no_open_pr
+
+available_guards:
+  - files_changed_ok
+  - has_branch
+  - has_error
+  - has_open_pr
+  - is_stale
+  - no_open_pr

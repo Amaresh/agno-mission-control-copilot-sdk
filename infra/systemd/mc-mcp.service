@@ -4,16 +4,16 @@ After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=%h/mission-control
-ExecStart=%h/mission-control/.venv/bin/python -m agents.mission_control.mcp.mission_control_server
-Environment=PYTHONPATH=%h/mission-control
+WorkingDirectory=/home/amaresh/projects/mission-control
+ExecStart=/home/amaresh/projects/mission-control/.venv/bin/python -m mission_control.mcp.mission_control_server
+Environment=PYTHONPATH=/home/amaresh/projects/mission-control
 Environment=MCP_PORT=8001
 Environment=MCP_TRANSPORT=sse
-EnvironmentFile=%h/mission-control/.env
+EnvironmentFile=/home/amaresh/projects/mission-control/.env
 Restart=always
 RestartSec=5
-StandardOutput=append:%h/mission-control/logs/mcp-mission-control.log
-StandardError=append:%h/mission-control/logs/mcp-mission-control.log
+StandardOutput=append:/home/amaresh/projects/mission-control/logs/mcp-mission-control.log
+StandardError=append:/home/amaresh/projects/mission-control/logs/mcp-mission-control.log
 
 [Install]
 WantedBy=default.target

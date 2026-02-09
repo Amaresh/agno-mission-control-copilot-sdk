@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mission Control</title>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --border: #30363d;
+    --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff;
+    --green: #3fb950; --yellow: #d29922; --red: #f85149;
+    --orange: #db6d28; --purple: #bc8cff; --cyan: #39d2c0;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* Header */
+  header { background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+  header h1 { font-size: 20px; font-weight: 600; }
+  header h1 span { color: var(--accent); }
+  .header-right { display: flex; align-items: center; gap: 16px; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .status-dot.live { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .refresh-btn { background: var(--surface); border: 1px solid var(--border); color: var(--muted);
+    padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  .refresh-btn:hover { color: var(--text); border-color: var(--accent); }
+  #last-refresh { color: var(--muted); font-size: 12px; }
+
+  /* Layout */
+  .container { display: grid; grid-template-columns: 1fr; gap: 0; height: calc(100vh - 57px); }
+  .top-section { display: grid; grid-template-columns: 240px 1fr; border-bottom: 1px solid var(--border); }
+
+  /* Agents Sidebar */
+  .agents-panel { background: var(--surface); border-right: 1px solid var(--border);
+    padding: 16px; overflow-y: auto; }
+  .panel-title { font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.5px; color: var(--muted); margin-bottom: 12px; }
+  .agent-card { background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 12px; margin-bottom: 8px; cursor: default; transition: border-color 0.2s; }
+  .agent-card:hover { border-color: var(--accent); }
+  .agent-name { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+  .agent-role { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+  .agent-meta { display: flex; justify-content: space-between; align-items: center; }
+  .agent-status { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 500; }
+  .agent-status.active { background: rgba(63,185,80,0.15); color: var(--green); }
+  .agent-status.idle { background: rgba(139,148,158,0.15); color: var(--muted); }
+  .agent-status.error { background: rgba(248,81,73,0.15); color: var(--red); }
+  .agent-status.blocked { background: rgba(210,153,34,0.15); color: var(--yellow); }
+  .agent-heartbeat { font-size: 10px; color: var(--muted); }
+
+  /* Kanban Board */
+  .kanban-wrapper { overflow-x: auto; padding: 16px; }
+  .kanban-board { display: flex; gap: 12px; min-height: 300px; height: 100%; }
+  .kanban-column { min-width: 220px; flex: 1; background: var(--surface); border-radius: 10px;
+    border: 1px solid var(--border); display: flex; flex-direction: column; }
+  .column-header { padding: 12px 14px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; }
+  .column-title { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .column-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .column-count { font-size: 11px; color: var(--muted); background: var(--bg);
+    padding: 1px 7px; border-radius: 10px; }
+  .column-body { flex: 1; padding: 8px; overflow-y: auto; }
+
+  .task-card { background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 12px; margin-bottom: 8px; transition: border-color 0.2s, transform 0.1s; }
+  .task-card:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .task-title { font-size: 13px; font-weight: 600; margin-bottom: 6px; line-height: 1.4; }
+  .task-desc { font-size: 11px; color: var(--muted); margin-bottom: 8px;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .task-footer { display: flex; justify-content: space-between; align-items: center; }
+  .task-priority { font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 600; text-transform: uppercase; }
+  .task-priority.critical { background: rgba(248,81,73,0.2); color: var(--red); }
+  .task-priority.high { background: rgba(219,109,40,0.2); color: var(--orange); }
+  .task-priority.medium { background: rgba(210,153,34,0.2); color: var(--yellow); }
+  .task-priority.low { background: rgba(139,148,158,0.15); color: var(--muted); }
+  .task-assignees { display: flex; gap: 4px; }
+  .task-assignee { font-size: 10px; background: rgba(88,166,255,0.15); color: var(--accent);
+    padding: 2px 6px; border-radius: 4px; }
+  .task-eta { font-size: 10px; margin-top: 6px; padding: 3px 8px; border-radius: 4px;
+    display: inline-flex; align-items: center; gap: 4px; }
+  .task-eta.soon { background: rgba(63,185,80,0.12); color: var(--green); }
+  .task-eta.medium-wait { background: rgba(210,153,34,0.12); color: var(--yellow); }
+  .task-eta.long-wait { background: rgba(248,81,73,0.12); color: var(--red); }
+
+  /* Activity Feed */
+  .bottom-section { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--border); }
+  .activity-panel { padding: 16px; overflow-y: auto; max-height: 250px; }
+  .activity-panel:first-child { border-right: 1px solid var(--border); }
+  .activity-item { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .activity-item:last-child { border-bottom: none; }
+  .activity-icon { width: 28px; height: 28px; border-radius: 50%; display: flex;
+    align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; }
+  .activity-icon.heartbeat { background: rgba(63,185,80,0.15); }
+  .activity-icon.task { background: rgba(88,166,255,0.15); }
+  .activity-icon.status { background: rgba(210,153,34,0.15); }
+  .activity-icon.message { background: rgba(188,140,255,0.15); }
+  .activity-text { font-size: 12px; line-height: 1.5; }
+  .activity-text .highlight { color: var(--accent); font-weight: 500; }
+  .activity-time { font-size: 10px; color: var(--muted); }
+
+  /* Stats bar */
+  .stats-bar { display: flex; gap: 24px; padding: 12px 24px; background: var(--surface);
+    border-bottom: 1px solid var(--border); }
+  .stat { display: flex; align-items: center; gap: 6px; }
+  .stat-value { font-size: 18px; font-weight: 700; }
+  .stat-label { font-size: 11px; color: var(--muted); }
+
+  .empty-state { color: var(--muted); font-size: 12px; text-align: center; padding: 24px; }
+
+  /* Column colors */
+  .col-inbox .column-dot { background: var(--muted); }
+  .col-assigned .column-dot { background: var(--accent); }
+  .col-in_progress .column-dot { background: var(--yellow); }
+  .col-review .column-dot { background: var(--purple); }
+  .col-done .column-dot { background: var(--green); }
+  .col-blocked .column-dot { background: var(--red); }
+
+  /* Mission swimlanes */
+  .mission-swimlane { margin-bottom: 12px; }
+  .swimlane-header { display: flex; align-items: center; gap: 8px; padding: 8px 16px;
+    border-radius: 6px; margin-bottom: 6px; font-size: 12px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.5px; cursor: pointer; }
+  .swimlane-header .swimlane-count { font-weight: 400; color: var(--muted); font-size: 11px; }
+  .swimlane-header .swimlane-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .swimlane-build { background: rgba(88,166,255,0.08); border-left: 3px solid var(--accent); }
+  .swimlane-build .swimlane-dot { background: var(--accent); }
+  .swimlane-verify { background: rgba(63,185,80,0.08); border-left: 3px solid var(--green); }
+  .swimlane-verify .swimlane-dot { background: var(--green); }
+  .swimlane-test { background: rgba(210,153,34,0.08); border-left: 3px solid var(--yellow); }
+  .swimlane-test .swimlane-dot { background: var(--yellow); }
+  .swimlane-deploy { background: rgba(188,140,255,0.08); border-left: 3px solid var(--purple); }
+  .swimlane-deploy .swimlane-dot { background: var(--purple); }
+  .swimlane-unknown { background: rgba(139,148,158,0.08); border-left: 3px solid var(--muted); }
+  .swimlane-unknown .swimlane-dot { background: var(--muted); }
+
+  /* Mission badge on task cards */
+  .task-mission { font-size: 9px; padding: 1px 5px; border-radius: 3px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.3px; }
+  .task-mission.build { background: rgba(88,166,255,0.15); color: var(--accent); }
+  .task-mission.verify { background: rgba(63,185,80,0.15); color: var(--green); }
+  .task-mission.test { background: rgba(210,153,34,0.15); color: var(--yellow); }
+  .task-mission.deploy { background: rgba(188,140,255,0.15); color: var(--purple); }
+
+  /* View toggle */
+  .view-toggle { display: flex; gap: 4px; background: var(--bg); border-radius: 6px; padding: 2px; }
+  .view-toggle button { background: none; border: none; color: var(--muted); padding: 4px 10px;
+    border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 500; }
+  .view-toggle button.active { background: var(--surface); color: var(--text); }
+
+  @media (max-width: 900px) {
+    .top-section { grid-template-columns: 1fr; }
+    .bottom-section { grid-template-columns: 1fr; }
+    .agents-panel { max-height: 200px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>⚡ <span>Mission Control</span></h1>
+  <div class="header-right">
+    <div class="view-toggle" id="view-toggle">
+      <button class="active" onclick="setView('flat')">Flat</button>
+      <button onclick="setView('mission')">By Mission</button>
+    </div>
+    <span id="last-refresh"></span>
+    <span class="status-dot live" id="status-dot"></span>
+    <button class="refresh-btn" onclick="refresh()">↻ Refresh</button>
+  </div>
+</header>
+
+<div class="stats-bar" id="stats-bar">
+  <div class="stat"><span class="stat-value" id="stat-agents">-</span><span class="stat-label">Agents</span></div>
+  <div class="stat"><span class="stat-value" id="stat-active">-</span><span class="stat-label">Active</span></div>
+  <div class="stat"><span class="stat-value" id="stat-tasks">-</span><span class="stat-label">Tasks</span></div>
+  <div class="stat"><span class="stat-value" id="stat-done">-</span><span class="stat-label">Done</span></div>
+  <div class="stat"><span class="stat-value" id="stat-heartbeats">-</span><span class="stat-label">Heartbeats (24h)</span></div>
+</div>
+
+<div class="container">
+  <div class="top-section">
+    <div class="agents-panel">
+      <div class="panel-title">Squad</div>
+      <div id="agents-list"></div>
+    </div>
+    <div class="kanban-wrapper">
+      <div class="kanban-board" id="kanban-board"></div>
+    </div>
+  </div>
+  <div class="bottom-section">
+    <div class="activity-panel">
+      <div class="panel-title">Recent Activity</div>
+      <div id="activity-feed"></div>
+    </div>
+    <div class="activity-panel">
+      <div class="panel-title">Heartbeat Log</div>
+      <div id="heartbeat-feed"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = window.location.origin;
+const COLUMNS = [
+  { key: 'INBOX', label: 'Inbox' },
+  { key: 'ASSIGNED', label: 'Assigned' },
+  { key: 'IN_PROGRESS', label: 'In Progress' },
+  { key: 'REVIEW', label: 'Review' },
+  { key: 'DONE', label: 'Done' },
+  { key: 'BLOCKED', label: 'Blocked' },
+];
+
+let currentView = 'flat';
+let cachedTasks = [];
+
+const MISSION_LABELS = {
+  build: '🔨 Build', verify: '✅ Verify', test: '🧪 Test', deploy: '🚀 Deploy',
+};
+
+function setView(view) {
+  currentView = view;
+  document.querySelectorAll('#view-toggle button').forEach(b => b.classList.remove('active'));
+  document.querySelector(`#view-toggle button[onclick="setView('${view}')"]`).classList.add('active');
+  renderKanban(cachedTasks);
+}
+
+const ACTIVITY_ICONS = {
+  TASK_CREATED: ['📋', 'task'],
+  TASK_ASSIGNED: ['👤', 'task'],
+  TASK_STATUS_CHANGED: ['🔄', 'status'],
+  MESSAGE_SENT: ['💬', 'message'],
+  AGENT_HEARTBEAT: ['💚', 'heartbeat'],
+  LEARNING_CAPTURED: ['🧠', 'message'],
+  DOCUMENT_CREATED: ['📄', 'task'],
+};
+
+function timeAgo(dateStr) {
+  if (!dateStr) return 'never';
+  const d = new Date(dateStr);
+  const now = new Date();
+  const secs = Math.floor((now - d) / 1000);
+  if (secs < 60) return `${secs}s ago`;
+  if (secs < 3600) return `${Math.floor(secs/60)}m ago`;
+  if (secs < 86400) return `${Math.floor(secs/3600)}h ago`;
+  return `${Math.floor(secs/86400)}d ago`;
+}
+
+function renderEta(eta) {
+  const m = eta.minutes;
+  let cls = 'soon', icon = '⚡', label;
+  if (m <= 15) { cls = 'soon'; icon = '⚡'; label = `~${m}m`; }
+  else if (m <= 45) { cls = 'medium-wait'; icon = '⏳'; label = `~${m}m`; }
+  else { cls = 'long-wait'; icon = '🕐'; label = m >= 120 ? `~${Math.round(m/60)}h` : `~${m}m`; }
+  const queueTip = eta.queue_size > 1 ? ` · #${eta.queue_position}/${eta.queue_size} in queue` : '';
+  const busyTip = eta.agent_busy ? ' · agent busy' : '';
+  return `<div class="task-eta ${cls}" title="Next heartbeat in ${eta.next_heartbeat_min}m${queueTip}${busyTip}">${icon} ETA ${label}${queueTip}</div>`;
+}
+
+function renderAgents(agents) {
+  const el = document.getElementById('agents-list');
+  if (!agents.length) { el.innerHTML = '<div class="empty-state">No agents</div>'; return; }
+  el.innerHTML = agents.map(a => `
+    <div class="agent-card">
+      <div class="agent-name">${a.name}</div>
+      <div class="agent-role">${a.role || ''}</div>
+      <div class="agent-meta">
+        <span class="agent-status ${a.status || 'idle'}">${(a.status || 'idle').toUpperCase()}</span>
+        <span class="agent-heartbeat">${a.last_heartbeat ? '♥ ' + timeAgo(a.last_heartbeat) : 'no heartbeat'}</span>
+      </div>
+    </div>
+  `).join('');
+  document.getElementById('stat-agents').textContent = agents.length;
+  document.getElementById('stat-active').textContent = agents.filter(a => a.status === 'active').length;
+}
+
+function renderTaskCard(t) {
+  const missionCls = t.mission_type || 'build';
+  return `
+    <div class="task-card">
+      <div class="task-title">${t.title}</div>
+      ${t.description ? `<div class="task-desc">${t.description}</div>` : ''}
+      <div class="task-footer">
+        <span class="task-priority ${t.priority || 'medium'}">${t.priority || 'medium'}</span>
+        <span class="task-mission ${missionCls}">${missionCls}</span>
+        <div class="task-assignees">
+          ${(t.assignees || []).map(a => `<span class="task-assignee">${a}</span>`).join('')}
+        </div>
+      </div>
+      ${t.eta ? renderEta(t.eta) : ''}
+    </div>
+  `;
+}
+
+function renderKanban(tasks) {
+  cachedTasks = tasks;
+  const board = document.getElementById('kanban-board');
+
+  if (currentView === 'mission') {
+    renderMissionKanban(board, tasks);
+  } else {
+    renderFlatKanban(board, tasks);
+  }
+
+  document.getElementById('stat-tasks').textContent = tasks.length;
+  document.getElementById('stat-done').textContent = tasks.filter(t => (t.status||'').toUpperCase() === 'DONE').length;
+}
+
+function renderFlatKanban(board, tasks) {
+  const grouped = {};
+  COLUMNS.forEach(c => grouped[c.key] = []);
+  tasks.forEach(t => {
+    const key = (t.status || 'INBOX').toUpperCase();
+    if (grouped[key]) grouped[key].push(t);
+    else grouped['INBOX'].push(t);
+  });
+
+  board.innerHTML = COLUMNS.map(col => {
+    const items = grouped[col.key];
+    return `
+      <div class="kanban-column col-${col.key.toLowerCase()}">
+        <div class="column-header">
+          <span class="column-title"><span class="column-dot"></span>${col.label}</span>
+          <span class="column-count">${items.length}</span>
+        </div>
+        <div class="column-body">
+          ${items.length === 0 ? '<div class="empty-state">No tasks</div>' :
+            items.map(t => renderTaskCard(t)).join('')
+          }
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderMissionKanban(board, tasks) {
+  // Group tasks by mission_type, then by status within each mission
+  const missions = {};
+  tasks.forEach(t => {
+    const mt = t.mission_type || 'build';
+    if (!missions[mt]) missions[mt] = {};
+    const key = (t.status || 'INBOX').toUpperCase();
+    if (!missions[mt][key]) missions[mt][key] = [];
+    missions[mt][key].push(t);
+  });
+
+  const missionOrder = ['build', 'verify', 'test', 'deploy'];
+  const sortedMissions = Object.keys(missions).sort((a, b) => {
+    const ia = missionOrder.indexOf(a), ib = missionOrder.indexOf(b);
+    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+  });
+
+  board.innerHTML = COLUMNS.map(col => {
+    const totalInCol = sortedMissions.reduce((sum, mt) => sum + ((missions[mt][col.key] || []).length), 0);
+    return `
+      <div class="kanban-column col-${col.key.toLowerCase()}">
+        <div class="column-header">
+          <span class="column-title"><span class="column-dot"></span>${col.label}</span>
+          <span class="column-count">${totalInCol}</span>
+        </div>
+        <div class="column-body">
+          ${totalInCol === 0 ? '<div class="empty-state">No tasks</div>' :
+            sortedMissions.map(mt => {
+              const items = missions[mt][col.key] || [];
+              if (items.length === 0) return '';
+              const label = MISSION_LABELS[mt] || mt;
+              const cls = ['build','verify','test','deploy'].includes(mt) ? mt : 'unknown';
+              return `
+                <div class="mission-swimlane">
+                  <div class="swimlane-header swimlane-${cls}">
+                    <span class="swimlane-dot"></span>
+                    ${label} <span class="swimlane-count">(${items.length})</span>
+                  </div>
+                  ${items.map(t => renderTaskCard(t)).join('')}
+                </div>
+              `;
+            }).join('')
+          }
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderActivities(activities) {
+  const feed = document.getElementById('activity-feed');
+  const heartbeats = document.getElementById('heartbeat-feed');
+
+  const general = activities.filter(a => a.type !== 'AGENT_HEARTBEAT');
+  const hb = activities.filter(a => a.type === 'AGENT_HEARTBEAT');
+
+  if (!general.length) {
+    feed.innerHTML = '<div class="empty-state">No activity yet</div>';
+  } else {
+    feed.innerHTML = general.slice(0, 20).map(a => {
+      const [icon, cls] = ACTIVITY_ICONS[a.type] || ['📌', 'task'];
+      return `
+        <div class="activity-item">
+          <div class="activity-icon ${cls}">${icon}</div>
+          <div>
+            <div class="activity-text">${a.agent ? `<span class="highlight">${a.agent}</span> · ` : ''}${a.message}</div>
+            <div class="activity-time">${timeAgo(a.created_at)}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  document.getElementById('stat-heartbeats').textContent = hb.length;
+  if (!hb.length) {
+    heartbeats.innerHTML = '<div class="empty-state">No heartbeats</div>';
+  } else {
+    heartbeats.innerHTML = hb.slice(0, 30).map(a => `
+      <div class="activity-item">
+        <div class="activity-icon heartbeat">💚</div>
+        <div>
+          <div class="activity-text"><span class="highlight">${a.agent || 'Agent'}</span> heartbeat</div>
+          <div class="activity-time">${timeAgo(a.created_at)}</div>
+        </div>
+      </div>
+    `).join('');
+  }
+}
+
+async function fetchJSON(path) {
+  try {
+    const r = await fetch(API + path);
+    if (!r.ok) throw new Error(r.status);
+    return await r.json();
+  } catch (e) {
+    console.error(`Failed: ${path}`, e);
+    return null;
+  }
+}
+
+async function refresh() {
+  const [agents, tasks, activities] = await Promise.all([
+    fetchJSON('/dashboard/agents'),
+    fetchJSON('/dashboard/tasks'),
+    fetchJSON('/dashboard/activities'),
+  ]);
+  if (agents) renderAgents(agents);
+  if (tasks) renderKanban(tasks);
+  if (activities) renderActivities(activities);
+
+  const dot = document.getElementById('status-dot');
+  dot.classList.toggle('live', agents !== null);
+
+  document.getElementById('last-refresh').textContent = 'Updated ' + new Date().toLocaleTimeString();
+}
+
+// Auto-refresh every 30s
+refresh();
+setInterval(refresh, 30000);
+</script>
+</body>
+</html>

@@ -1,0 +1,124 @@
+agents:
+  friday:
+    heartbeat_offset: 2
+    level: specialist
+    mcp_servers:
+    - github
+    mission: build
+    name: Friday
+    role: Developer
+  fury:
+    heartbeat_offset: 10
+    level: specialist
+    mcp_servers:
+    - github
+    mission: build
+    name: Fury
+    role: Developer
+  jarvis:
+    heartbeat_offset: 0
+    level: lead
+    mcp_servers:
+    - github
+    - telegram
+    mission: verify
+    name: Jarvis
+    role: Squad Lead / Coordinator
+  loki:
+    heartbeat_offset: 14
+    level: specialist
+    mcp_servers:
+    - github
+    mission: build
+    name: Loki
+    role: Developer
+  pepper:
+    heartbeat_offset: 12
+    level: specialist
+    mcp_servers:
+    - github
+    mission: build
+    name: Pepper
+    role: Developer
+  quill:
+    always_run:
+      prompt: "Run your infrastructure monitoring checklist NOW.\nUse your DigitalOcean\
+        \ MCP tools to check:\n1. List all apps \u2014 check each status (ACTIVE/DEPLOYING/ERROR)\n\
+        2. List all databases \u2014 check each status (ONLINE/MAINTENANCE/etc)\n\
+        3. List all droplets \u2014 check each status (active/off)\n4. For any app\
+        \ NOT in ACTIVE state, get its recent deployments and logs\n5. Check for any\
+        \ deployment failures in the last hour\nWrite a health summary. Report issues\
+        \ with severity.\nIf everything is healthy, confirm all-clear with counts.\n"
+      timeout: 60
+    heartbeat_offset: 16
+    level: specialist
+    mcp_servers:
+    - digitalocean
+    mission: build
+    name: Quill
+    role: "Infrastructure Ops \u2014 DigitalOcean Monitor"
+  shuri:
+    heartbeat_offset: 8
+    level: specialist
+    mcp_servers:
+    - github
+    mission: build
+    name: Shuri
+    role: Testing & QA
+  vision:
+    agent_class: healer
+    heartbeat_interval: 3600
+    heartbeat_offset: 0
+    level: lead
+    mcp_servers: []
+    name: Vision
+    role: System Healer / Ops Monitor
+  wanda:
+    heartbeat_offset: 18
+    level: specialist
+    mcp_servers:
+    - github
+    mission: build
+    name: Wanda
+    role: Developer
+  wong:
+    heartbeat_offset: 6
+    level: specialist
+    mcp_servers:
+    - github
+    mission: build
+    name: Wong
+    role: Documentation
+available_guards:
+- files_changed_ok
+- has_branch
+- has_error
+- has_open_pr
+- is_stale
+- no_open_pr
+missions:
+  build:
+    default_config:
+      source_branch: main
+    description: "Developer workflow: branch \u2192 code \u2192 PR"
+    initial_state: ASSIGNED
+    transitions:
+    - from: ASSIGNED
+      to: IN_PROGRESS
+    - from: IN_PROGRESS
+      guard: has_open_pr
+      to: REVIEW
+    - from: IN_PROGRESS
+      guard: has_error
+      to: ASSIGNED
+  verify:
+    description: "Review workflow: check PR exists \u2192 approve or reject"
+    initial_state: REVIEW
+    transitions:
+    - from: REVIEW
+      guard: has_open_pr
+      to: DONE
+    - from: REVIEW
+      guard: no_open_pr
+      to: ASSIGNED
+version: '1.0'

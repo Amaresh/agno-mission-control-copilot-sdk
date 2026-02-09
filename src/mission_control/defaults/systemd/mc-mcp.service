@@ -1,0 +1,14 @@
+[Unit]
+Description=Mission Control MCP Server
+After=network.target mc-api.service
+
+[Service]
+Type=simple
+WorkingDirectory={MC_HOME}
+EnvironmentFile={MC_HOME}/.env
+ExecStart={PYTHON} -m mission_control.mcp.mission_control_server
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

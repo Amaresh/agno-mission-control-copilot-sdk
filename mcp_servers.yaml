@@ -1,0 +1,82 @@
+# mcp_servers.yaml — MCP server definitions for Mission Control
+#
+# Each server entry defines how to launch an MCP server process.
+# Agents reference these by name in workflows.yaml (mcp_servers: [github, ...]).
+# Every agent also gets the built-in "mission-control" MCP automatically.
+#
+# To add your own MCP server:
+#   1. Add an entry below with command, args, and env_keys
+#   2. Set the required env vars in your .env file
+#   3. Reference by name in your agent's mcp_servers list in workflows.yaml
+#   4. Verify with GET /mcp/servers
+version: "1.0"
+
+servers:
+  github:
+    command: "npx"
+    args: ["-y", "@modelcontextprotocol/server-github"]
+    env_keys: [GITHUB_TOKEN]
+    env_map:
+      GITHUB_PERSONAL_ACCESS_TOKEN: GITHUB_TOKEN
+    description: "GitHub repository, issues, and PR management"
+    tools:
+      - get_file_contents
+      - search_code
+      - search_repositories
+      - search_issues
+      - list_commits
+      - get_commit
+      - list_branches
+      - list_issues
+      - get_issue
+      - create_issue
+      - add_issue_comment
+      - list_pull_requests
+      - get_pull_request
+      - get_pull_request_diff
+      - create_pull_request
+      - add_pull_request_review_comment
+      - create_branch
+      - create_or_update_file
+
+  digitalocean:
+    command: "npx"
+    args: ["-y", "@digitalocean/mcp"]
+    env_keys: [DO_API_TOKEN]
+    args_template: "-digitalocean-api-token {DO_API_TOKEN}"
+    description: "DigitalOcean infrastructure management"
+
+  telegram:
+    command: "npx"
+    args: ["-y", "@zhigang1992/telegram-mcp"]
+    env_keys: [TELEGRAM_BOT_TOKEN]
+    env_map:
+      TELEGRAM_BOT_TOKEN: TELEGRAM_BOT_TOKEN
+    description: "Telegram messaging"
+
+  tavily:
+    command: "npx"
+    args: ["-y", "tavily-mcp"]
+    env_keys: [TAVILY_API_KEY]
+    env_map:
+      TAVILY_API_KEY: TAVILY_API_KEY
+    description: "Web search and research"
+
+  twilio:
+    command: "npx"
+    args: ["-y", "twilio-mcp"]
+    env_keys: [TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN]
+    env_map:
+      TWILIO_ACCOUNT_SID: TWILIO_ACCOUNT_SID
+      TWILIO_AUTH_TOKEN: TWILIO_AUTH_TOKEN
+      TWILIO_PHONE_NUMBER: TWILIO_PHONE_NUMBER
+    description: "Twilio SMS and WhatsApp messaging"
+
+  # --- Add your own MCP servers below ---
+  # notion:
+  #   command: "npx"
+  #   args: ["-y", "@notionhq/mcp-server"]
+  #   env_keys: [NOTION_API_KEY]
+  #   env_map:
+  #     NOTION_API_KEY: NOTION_API_KEY
+  #   description: "Notion workspace management"

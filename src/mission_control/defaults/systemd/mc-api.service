@@ -1,0 +1,14 @@
+[Unit]
+Description=Mission Control API Server
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory={MC_HOME}
+EnvironmentFile={MC_HOME}/.env
+ExecStart={PYTHON} -m uvicorn mission_control.api:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

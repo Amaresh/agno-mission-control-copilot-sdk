@@ -5,14 +5,14 @@ Requires=mc-mcp.service
 
 [Service]
 Type=simple
-WorkingDirectory=%h/mission-control
-ExecStart=%h/mission-control/.venv/bin/python -m agents.telegram_bot
-Environment=PYTHONPATH=%h/mission-control
-EnvironmentFile=%h/mission-control/.env
+WorkingDirectory=/home/amaresh/projects/mission-control
+ExecStart=/home/amaresh/projects/mission-control/.venv/bin/python -m mission_control.telegram_bot
+Environment=PYTHONPATH=/home/amaresh/projects/mission-control
+EnvironmentFile=/home/amaresh/projects/mission-control/.env
 Restart=always
 RestartSec=10
-StandardOutput=append:%h/mission-control/logs/telegram-bot.log
-StandardError=append:%h/mission-control/logs/telegram-bot.log
+StandardOutput=append:/home/amaresh/projects/mission-control/logs/telegram-bot.log
+StandardError=append:/home/amaresh/projects/mission-control/logs/telegram-bot.log
 
 [Install]
 WantedBy=default.target

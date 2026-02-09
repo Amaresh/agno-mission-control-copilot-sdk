@@ -4,21 +4,21 @@ import uuid
 from datetime import datetime, timezone
 
 import pytest_asyncio
-from sqlalchemy import delete
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.pool import NullPool
 
-from agents.config import settings
-from agents.mission_control.core.database import (
+from mission_control.mission_control.core.database import (
     Agent,
-    AgentLevel,
     AgentStatus,
+    AgentLevel,
+    Task,
+    TaskStatus,
+    TaskPriority,
     LearningEvent,
     LearningPattern,
-    Task,
-    TaskPriority,
-    TaskStatus,
 )
+from mission_control.config import settings
+from sqlalchemy import delete
 
 # Test engine: NullPool so every session gets a dedicated connection
 _test_engine = create_async_engine(
@@ -31,9 +31,8 @@ TestSession = async_sessionmaker(
 )
 
 # Monkey-patch the production session factory so capture.py uses NullPool too
-import agents.mission_control.core.database as _db_mod
-import agents.mission_control.learning.capture as _capture_mod
-
+import mission_control.mission_control.learning.capture as _capture_mod
+import mission_control.mission_control.core.database as _db_mod
 _capture_mod.AsyncSessionLocal = TestSession
 _db_mod.AsyncSessionLocal = TestSession
 
