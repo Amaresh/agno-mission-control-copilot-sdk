@@ -101,7 +101,7 @@ Edit `~/.mission-control/workflows.yaml` to add or remove agents. Default ships 
 
 ## Shipped Missions
 
-Two missions ship out of the box. Define your own in `workflows.yaml` — any state machine with guards.
+Three missions ship out of the box. Define your own in `workflows.yaml` — any state machine with guards, pre/post actions, and prompt templates. See the [Custom Missions Guide](docs/CUSTOM_MISSIONS.md).
 
 ### `build` — Developer Workflow
 
@@ -113,6 +113,28 @@ ASSIGNED → IN_PROGRESS → REVIEW → DONE
             No → ASSIGNED   No PR → ASSIGNED
 ```
 
+Agents write code via MCP tools, create branches, and open PRs. Vision verifies PR existence before approving.
+
+### `content` — Content Marketing Pipeline
+
+```
+RESEARCH → DRAFT → REVIEW → PUBLISH → PROMOTE → DONE
+    │         │        │         │          │
+ (Tavily)  (Write)  (Quality) (Publish)  (Social)
+ web search  2000+   check &   commit    media
+             words   approve   final     posts
+```
+
+A 5-stage content pipeline with automatic hand-offs between specialized agents:
+
+| Stage | Agent Role | Pre-Actions | Post-Actions |
+|-------|-----------|-------------|-------------|
+| RESEARCH | Trend Researcher | `tavily_search` — web research | `github_commit` — research brief |
+| DRAFT | SEO Writer | `github_read` — research brief | `github_commit` — draft article |
+| REVIEW | Quality Editor | `github_read` — draft | `github_commit` — approved draft |
+| PUBLISH | Publisher | `github_read` — draft | `github_commit` — published article |
+| PROMOTE | Social Amplifier | `github_read` — published | `github_commit` — social posts |
+
 ### `verify` — Review Workflow
 
 ```
@@ -120,7 +142,7 @@ REVIEW → DONE        (if PR exists)
 REVIEW → ASSIGNED    (if no PR — send back)
 ```
 
-**Mission core is pure workflow management.** Transitions are gated by deterministic guards (PR exists? branch created?), never by LLM response parsing. LLM output is stored as metadata for Vision to analyze asynchronously.
+**Mission core is pure workflow management.** Transitions are gated by deterministic guards (PR exists? branch created? file committed?), never by LLM response parsing. The `content` mission demonstrates the full GenericMission engine — pre-actions gather context, prompts are rendered from templates, and post-actions persist deliverables to GitHub.
 
 ## CLI Commands
 
