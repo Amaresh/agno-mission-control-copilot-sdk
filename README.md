@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![PyPI](https://img.shields.io/badge/TestPyPI-v0.2.0-orange)](https://test.pypi.org/project/agno-mission-control/0.2.0/)
+[![PyPI](https://img.shields.io/badge/TestPyPI-v0.3.0-orange)](https://test.pypi.org/project/agno-mission-control/0.3.0/)
 
 > **A self-orchestrating AI agent platform that runs autonomous missions — not just code, but any workflow you can define as a YAML state machine.** Ships with two ready-to-go missions: a **build** pipeline (branch → code → PR) and a **content** pipeline (research → draft → review → publish → promote). Need something else? Define a deploy mission, a QA mission, an infra monitoring mission — any multi-stage workflow where agents pick up work, execute steps, and hand off to the next stage. Agents are YAML config entries, not code. Transitions are guarded by deterministic checks, not LLM output. Vision runs 16 automated health checks every hour, alerts you via Telegram, and you can fix issues from your phone in real-time. The entire system runs on modest hardware (even a $12 cloud server) because all LLM inference is delegated to GitHub Copilot SDK — no local GPU, no expensive API bills. Only a `GITHUB_TOKEN` is required; everything else (Telegram, Tavily, DigitalOcean) is bring-your-own-keys. The Agno framework silently learns from every interaction, so your squad gets measurably better at your workflows over days and weeks without manual tuning.
 
@@ -22,7 +22,8 @@ That's it. The wizard detects your system, authenticates GitHub, sets up the dat
 Mission Control is a **mission-driven agent orchestration platform**. You define missions (state machines), guards (transition checks), and agents (YAML config) — the platform handles scheduling, coordination, health monitoring, and learning.
 
 - **Flexible missions** — ships with `build` (branch → code → PR), `content` (research → write → review → publish → promote), and `verify` (review → approve) — or define any workflow as a YAML state machine
-- **Config-driven agents** — 7 default, add more by copying a YAML block. No code per agent.
+- **Config-driven agents** — 18 default across two missions, add more by copying a YAML block. No code per agent.
+- **Visual Mission Builder** — drag-and-drop workflow designer with live deploy
 - **Deterministic guards** — transitions gated by factual checks (PR exists? branch created? files valid?), never by LLM output
 - **GitHub Copilot SDK** (GPT-4.1) as LLM — runs on modest hardware, no local GPU needed
 - **BYOK MCP tools** — GitHub ships built-in. Bring Your Own Keys for Telegram, Tavily, DigitalOcean, Twilio, or any MCP server. Add new tools by dropping an entry in `mcp_servers.yaml`.
@@ -74,7 +75,7 @@ All agents are config-driven via `workflows.yaml`. Only Jarvis (lead orchestrati
 | **Jarvis** | Squad Lead | 15 min | Decomposes work, delegates, reviews PRs, gatekeeps REVIEW→DONE |
 | **Vision** | System Healer | 1 hour | 16 automated health checks, auto-fixes, Telegram crisis mode escalation |
 
-### Specialists
+### Specialists (Build Squad)
 
 | Agent | Role | Description |
 |-------|------|-------------|
@@ -83,17 +84,32 @@ All agents are config-driven via `workflows.yaml`. Only Jarvis (lead orchestrati
 | **Shuri** | Testing & QA | Edge cases, regression testing |
 | **Fury** | Developer | Strategic, research-driven |
 | **Pepper** | Developer | Pragmatic, ships fast |
+| **Loki** | Developer | Creative problem solver |
+| **Wanda** | Developer | Frontend specialist |
+
+### Content Squad
+
+| Agent | Role | Interval | Description |
+|-------|------|----------|-------------|
+| **Scout** | Trend Researcher | 6 hr | SEO keyword research, trending topics |
+| **Ink** | SEO Writer | 15 min | Long-form content drafting |
+| **Sage** | Quality Editor | 8 hr | Content review and approval |
+| **Ezra** | Publisher | 3 hr | Publish to GitHub, format for web |
+| **Herald** | Social Amplifier | 12 hr | Social media promotion |
+| **Lurker** | Reddit Scout | 8 hr | Reddit outreach opportunities |
+| **Morgan** | Marketing Lead | 8 hr | Content strategy via Telegram |
+| **Archie** | Analytics Reporter | 7 days | Performance analytics |
 
 ### Scaling Agents
 
-Edit `~/.mission-control/workflows.yaml` to add or remove agents. Default ships with **7 agents**.
+Edit `~/.mission-control/workflows.yaml` to add or remove agents. Default ships with **18 agents** across two missions.
 
 **Memory estimate:** Each agent spawns a Copilot SDK session (~565 MB). The platform overhead (API, scheduler, MCP, DB) adds ~500 MB.
 
 | Agents | RAM (est.) | Guidance |
 |--------|------------|----------|
-| 7 | ~4.5 GB | Default — full squad (Jarvis, Vision, Friday, Wong, Shuri, Fury, Pepper) |
-| 5 | ~3.3 GB | Drop 2 specialists (e.g. remove Fury + Pepper) |
+| 18 | ~10.7 GB | Full squad — build + content missions |
+| 9 | ~5.6 GB | Build squad only |
 | 3 | ~2.2 GB | Core trio: Jarvis (lead), Friday (dev), Vision (ops) |
 | 1 | ~1.1 GB | Jarvis only — single-agent mode |
 
@@ -143,6 +159,19 @@ REVIEW → ASSIGNED    (if no PR — send back)
 ```
 
 **Mission core is pure workflow management.** Transitions are gated by deterministic guards (PR exists? branch created? file committed?), never by LLM response parsing. The `content` mission demonstrates the full GenericMission engine — pre-actions gather context, prompts are rendered from templates, and post-actions persist deliverables to GitHub.
+
+## Mission Builder
+
+Define custom mission pipelines visually — drag stages, connect transitions, assign guards, and deploy with one click. No YAML editing required.
+
+![Mission Builder — visual workflow designer](docs/images/mission-builder.png)
+
+The builder supports:
+- **Stage nodes** with prompt templates, pre/post actions, and guard conditions
+- **Transitions** between stages with optional guard gates
+- **Templates** — start from built-in build or content templates, or blank canvas
+- **Save & Deploy** — writes to `workflows.yaml` and hot-reloads all agents instantly
+- **Mission CRUD API** — `GET/POST/PUT/DELETE /api/missions` for programmatic management
 
 ## CLI Commands
 
@@ -388,6 +417,8 @@ All endpoints are served by `mc-api` on port 8000. Full interactive docs at `/do
 | POST | `/workflow` | Hot-reload workflow config from YAML body |
 | GET | `/workflow/guards` | List available guard functions |
 | GET | `/workflow/missions` | List mission definitions + state machines |
+| GET/POST/PUT/DELETE | `/api/missions` | Mission CRUD (create, read, update, delete) |
+| GET | `/dashboard/missions/builder` | Visual mission builder (HTML) |
 
 ### Dashboard & Kanban
 
@@ -528,7 +559,7 @@ git clone https://github.com/your-org/agno-mission-control-copilot-sdk.git
 cd agno-mission-control-copilot-sdk
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest tests/ -q    # 96 E2E tests (no mocks)
+pytest tests/ -q    # 126+ E2E tests (no mocks)
 ```
 
 In dev mode, `paths.py` auto-detects the project root (via `pyproject.toml`) and uses it as `MC_HOME`. Set `MC_HOME=/custom/path` to override.
@@ -550,7 +581,7 @@ agno-mission-control/
 │   ├── mission_control/core/      # State machine, database, factory
 │   ├── mission_control/mcp/       # MCP server + registry
 │   └── squad/                     # Agent working dirs (SOUL.md, daily/)
-├── tests/                         # 96 E2E tests (no mocks)
+├── tests/                         # 126+ E2E tests (no mocks)
 ├── infra/systemd/                 # Dev systemd service files
 ├── workflows.yaml                 # Active workflow config
 ├── mcp_servers.yaml               # Active MCP server definitions

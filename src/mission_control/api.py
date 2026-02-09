@@ -315,7 +315,6 @@ async def dashboard_tasks():
         TaskAssignment,
         TaskStatus,
     )
-    from mission_control.mission_control.scheduler.heartbeat import AGENT_SCHEDULE
 
     async with AsyncSessionLocal() as session:
         result = await session.execute(
@@ -367,6 +366,19 @@ async def dashboard_tasks():
         )).all()
         agents_busy = {r[0] for r in ip_rows}
 
+        # Pre-fetch: heartbeat offsets from agents table
+        offset_rows = (await session.execute(
+            select(AgentModel.name, AgentModel.heartbeat_offset_minutes)
+        )).all()
+        agent_offsets = {name.lower(): off or 0 for name, off in offset_rows}
+
+        # Load actual heartbeat intervals from workflow config
+        from mission_control.mission_control.core.workflow_loader import get_workflow_loader
+        _wf = get_workflow_loader().to_dict()
+        _agent_intervals = {}
+        for _aname, _acfg in _wf.get("agents", {}).items():
+            _agent_intervals[_aname.lower()] = _acfg.get("heartbeat_interval", 900)  # default 15min
+
         now = datetime.now(timezone.utc)
 
         task_list = []
@@ -384,21 +396,37 @@ async def dashboard_tasks():
             if status_val == "assigned" and assignees:
                 agent_name = assignees[0]
                 agent_key = agent_name.lower()
-                offset = AGENT_SCHEDULE.get(agent_key, 0)
+                offset = agent_offsets.get(agent_key, 0)
 
-                # Next heartbeat: offset pattern is :offset, :offset+15, :offset+30, :offset+45
-                slots = sorted(set((offset + i*15) % 60 for i in range(4)))
-                current_min = now.minute
-                next_slot = None
-                for s in slots:
-                    if s > current_min:
-                        next_slot = s
-                        break
-                if next_slot is None:
-                    next_slot = slots[0]  # wraps to next hour
-                mins_to_next = (next_slot - current_min) % 60
-                if mins_to_next == 0:
-                    mins_to_next = 15  # just fired, next in 15
+                # Next heartbeat based on actual agent interval
+                interval_sec = _agent_intervals.get(agent_key, 900)
+                interval_min = interval_sec / 60
+
+                if interval_min <= 60:
+                    # Short-cycle agents (<=1h): offset pattern within the hour
+                    cycle = max(int(interval_min), 1)
+                    slots = sorted(set((offset + i * cycle) % 60 for i in range(60 // cycle + 1)))
+                    current_min = now.minute
+                    next_slot = None
+                    for s in slots:
+                        if s > current_min:
+                            next_slot = s
+                            break
+                    if next_slot is None:
+                        next_slot = slots[0]
+                    mins_to_next = (next_slot - current_min) % 60
+                    if mins_to_next == 0:
+                        mins_to_next = cycle
+                else:
+                    # Long-cycle agents (>1h): compute from last heartbeat
+                    agent_row = (await session.execute(
+                        select(AgentModel.last_heartbeat).where(AgentModel.name == agent_name)
+                    )).scalar()
+                    if agent_row:
+                        elapsed = (now - agent_row).total_seconds() / 60
+                        mins_to_next = max(1, round(interval_min - elapsed))
+                    else:
+                        mins_to_next = round(interval_min)
 
                 # Queue position
                 pos_info = queue_pos.get(t.id)
@@ -407,9 +435,10 @@ async def dashboard_tasks():
                 # Avg task duration for this agent (seconds → minutes)
                 avg_dur_min = avg_task_dur.get(agent_name, 120) / 60  # default 2min
 
-                # ETA = next heartbeat + (queue_pos * 15min cycle) + busy penalty
+                # ETA = next heartbeat + (queue_pos * interval) + busy penalty
                 busy_penalty = avg_dur_min if agent_name in agents_busy else 0
-                eta_minutes = round(mins_to_next + (pos * 15) + busy_penalty)
+                cycle_min = interval_min if interval_min <= 60 else interval_min
+                eta_minutes = round(mins_to_next + (pos * cycle_min) + busy_penalty)
 
                 eta_info = {
                     "minutes": eta_minutes,

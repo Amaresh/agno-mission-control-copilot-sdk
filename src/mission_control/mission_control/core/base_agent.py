@@ -187,13 +187,16 @@ A helpful and efficient AI agent.
         # Try Copilot SDK first (premium model via GitHub)
         if settings.use_copilot_sdk:
             try:
-                model = CopilotModel(id=settings.copilot_model)
+                model = CopilotModel(id=settings.copilot_model, agent_name=self.name)
 
                 # Configure MCP servers for Copilot SDK native tool support
                 mcp_servers = self._build_copilot_mcp_config()
                 if mcp_servers:
                     model.set_mcp_servers(mcp_servers)
                     self.logger.info("Configured MCP servers for Copilot", num_servers=len(mcp_servers))
+
+                if self._mcp_tools:
+                    model.set_sdk_tools_from_mcp(self._mcp_tools)
 
                 self.logger.info("Using Copilot SDK model", model=settings.copilot_model)
             except Exception as e:
@@ -256,52 +259,20 @@ A helpful and efficient AI agent.
     def _build_copilot_mcp_config(self) -> Dict[str, Any]:
         """Build MCP server config for Copilot SDK sessions.
         
-        Uses MCPRegistry (mcp_servers.yaml) for server definitions.
-        mission-control MCP is always injected as built-in.
+        Only includes the mission-control SSE server — local subprocess
+        servers (tavily, github) are handled via set_sdk_tools_from_mcp().
         """
-        from mission_control.mission_control.mcp.registry import get_mcp_registry
-        registry = get_mcp_registry()
-
-        mcp_servers = {}
-
-        # Mission Control MCP — always injected (built-in)
+        servers = {}
         mcp_port = int(os.environ.get("MCP_PORT", "8001"))
         mc_tools = ["list_tasks", "list_agents", "get_my_tasks", "list_documents"]
         if self.level == "lead":
             mc_tools.extend(["update_task_status", "create_task", "assign_task"])
-        mcp_servers["mission-control"] = {
+        servers["mission-control"] = {
             "type": "sse",
             "url": f"http://127.0.0.1:{mcp_port}/sse",
             "tools": mc_tools,
         }
-
-        # Add each server from the agent's mcp_servers list via registry
-        for server_name in self.mcp_servers:
-            config = registry.get_server_config(server_name)
-            if not config:
-                continue
-
-            wrapper_path = self._ensure_mcp_wrapper(
-                name=server_name,
-                command=config.command,
-                args=config.args,
-                env=config.env,
-            )
-
-            entry: Dict[str, Any] = {
-                "type": "local",
-                "command": wrapper_path,
-                "args": [],
-            }
-
-            # Add tools allowlist if defined in mcp_servers.yaml
-            tools = registry.get_tools_allowlist(server_name)
-            if tools:
-                entry["tools"] = tools
-
-            mcp_servers[server_name] = entry
-
-        return mcp_servers
+        return servers
 
     @staticmethod
     def _ensure_mcp_wrapper(

@@ -33,6 +33,18 @@ from pydantic import BaseModel
 
 logger = structlog.get_logger(__name__)
 
+# Built-in SDK tools that must be excluded for non-Vision agents.
+# These are local filesystem / shell tools injected by the SDK by default.
+# Agents operate exclusively via MCP servers (GitHub, etc.), so these
+# must be excluded to prevent the LLM from choosing them over MCP tools.
+_EXCLUDED_BUILTIN_TOOLS = [
+    "create", "edit", "view", "bash", "grep", "glob",
+    "write_bash", "read_bash", "stop_bash", "list_bash",
+    "report_intent", "update_todo", "ask_user", "task",
+    "skill", "web_fetch", "web_search",
+    "fetch_copilot_cli_documentation",
+]
+
 # GitHub MCP write tools that require repo-scope enforcement.
 # When no repo scope is active, these are stripped from the session
 # MCP config so the Copilot SDK cannot invoke them.
@@ -154,6 +166,11 @@ class CopilotModel(Model):
     _allowed_owner: Optional[str] = field(default=None, repr=False)
     _allowed_repo: Optional[str] = field(default=None, repr=False)
 
+    # Agent name — used to conditionally exempt agents (e.g. Vision) from tool exclusion
+    agent_name: Optional[str] = field(default=None, repr=False)
+
+    _sdk_tools: Optional[list] = field(default=None, repr=False)
+
     def __post_init__(self):
         """Initialize after dataclass creation."""
         if not hasattr(self, '_lock') or self._lock is None:
@@ -178,6 +195,59 @@ class CopilotModel(Model):
         else:
             self._allowed_owner = None
             self._allowed_repo = None
+
+    def set_sdk_tools_from_mcp(self, mcp_tools: list) -> None:
+        """Convert already-connected Agno MCPTools into Copilot SDK custom Tool objects.
+
+        The SDK's local MCP subprocess spawning is unreliable for npx-based
+        servers.  Instead we reuse the Agno-level connections that are already
+        established and wrap each entrypoint as an SDK ``Tool``.
+        """
+        if not mcp_tools:
+            return
+
+        from copilot.types import Tool
+
+        sdk_tools: list[Tool] = []
+
+        for mcp_tool in mcp_tools:
+            if not hasattr(mcp_tool, "entrypoints") or not mcp_tool.entrypoints:
+                continue
+
+            for ep in mcp_tool.entrypoints:
+                ep_ref = ep  # capture for closure
+
+                async def _handler(invocation, _ep=ep_ref):
+                    try:
+                        result = await _ep.run(
+                            invocation.arguments or {},
+                            print_output=False,
+                        )
+                        if hasattr(result, "content"):
+                            text = "\n".join(
+                                getattr(c, "text", str(c))
+                                for c in result.content
+                            )
+                        else:
+                            text = str(result)
+                        return {"textResultForLlm": text[:8000]}
+                    except Exception as exc:
+                        return {"error": str(exc)}
+
+                sdk_tools.append(Tool(
+                    name=ep.name,
+                    description=getattr(ep, "description", "") or "",
+                    handler=_handler,
+                    parameters=getattr(ep, "inputSchema", None)
+                    or getattr(ep, "input_schema", None)
+                    or {"type": "object", "properties": {}},
+                ))
+
+        self._sdk_tools = sdk_tools if sdk_tools else None
+        if sdk_tools:
+            logger.info("Converted MCP tools to SDK custom tools",
+                        count=len(sdk_tools),
+                        names=[t.name for t in sdk_tools[:5]])
 
     async def _ensure_client(self):
         """Ensure Copilot client is initialized."""
@@ -267,9 +337,19 @@ class CopilotModel(Model):
                 if self._allowed_owner else "none",
             )
 
+        # Exclude SDK built-in tools for headless agents (Vision keeps them)
+        if not self.agent_name or self.agent_name.lower() != "vision":
+            session_config["excluded_tools"] = _EXCLUDED_BUILTIN_TOOLS
+
+        # Register custom tools converted from Agno MCPTools
+        if self._sdk_tools:
+            session_config["tools"] = self._sdk_tools
+            logger.debug("Added custom tools to session", count=len(self._sdk_tools))
+
         session = await self._client.create_session(session_config)
         logger.debug("Created Copilot session", user_id=user_id, model=self.id,
-                     has_system=bool(system_message), has_mcp=bool(self.mcp_servers))
+                     has_system=bool(system_message), has_mcp=bool(self.mcp_servers),
+                     custom_tools=len(self._sdk_tools) if self._sdk_tools else 0)
 
         return session
 
@@ -459,7 +539,7 @@ class CopilotModel(Model):
         finally:
             # Destroy session to release MCP server subprocesses
             try:
-                session.destroy()
+                await session.destroy()
                 logger.debug("Destroyed Copilot session after request")
             except Exception as e:
                 logger.warning("Failed to destroy session", error=str(e))
@@ -633,7 +713,7 @@ class CopilotModel(Model):
         finally:
             # Destroy session to release MCP server subprocesses
             try:
-                session.destroy()
+                await session.destroy()
                 logger.debug("Destroyed streaming Copilot session")
             except Exception as e:
                 logger.warning("Failed to destroy streaming session", error=str(e))
