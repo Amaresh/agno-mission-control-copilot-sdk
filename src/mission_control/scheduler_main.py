@@ -25,10 +25,14 @@ logger = structlog.get_logger()
 # hourly agents (like Vision) get 65 min.
 WATCHDOG_GRACE_MINUTES = 5
 
-# Suppress repeated alerts: track when we last alerted per agent.
-# Only re-alert after WATCHDOG_SUPPRESS_MINUTES for the same agent.
-WATCHDOG_SUPPRESS_MINUTES = 120  # 2 hours
+# Suppress repeated alerts per-agent.  Re-alert interval = max(agent_interval * 3, 6 hours).
+# This avoids flooding for agents that keep timing out.
 _last_watchdog_alert: dict[str, datetime] = {}
+
+
+def _suppress_minutes(interval_sec: int) -> int:
+    """Re-alert cooldown: 3× the agent's interval, minimum 6 hours."""
+    return max(interval_sec * 3 // 60, 360)
 
 
 async def _check_heartbeat_health():
@@ -54,12 +58,15 @@ async def _check_heartbeat_health():
             if not stale_agents:
                 return
 
-            # Suppress repeated alerts — only re-alert after WATCHDOG_SUPPRESS_MINUTES
+            # Suppress repeated alerts — cooldown proportional to agent interval
             now_check = datetime.now(timezone.utc)
             unsuppressed = []
             for name, threshold in stale_agents:
                 last_alert = _last_watchdog_alert.get(name)
-                if last_alert is None or (now_check - last_alert).total_seconds() > WATCHDOG_SUPPRESS_MINUTES * 60:
+                key = name.lower()
+                interval_sec = configs.get(key, {}).get("heartbeat_interval", 900)
+                cooldown = _suppress_minutes(interval_sec) * 60
+                if last_alert is None or (now_check - last_alert).total_seconds() > cooldown:
                     unsuppressed.append((name, threshold))
                     _last_watchdog_alert[name] = now_check
 

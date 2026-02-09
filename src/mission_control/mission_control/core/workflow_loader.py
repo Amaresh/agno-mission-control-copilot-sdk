@@ -16,8 +16,10 @@ from mission_control.mission_control.core.guards import GuardRegistry
 
 logger = structlog.get_logger()
 
-# Default path — project root
-_DEFAULT_YAML = Path(__file__).resolve().parents[3] / "workflows.yaml"
+# Default path — use centralized path resolver
+from mission_control.paths import workflows_yaml as _workflows_yaml_path
+
+_DEFAULT_YAML = _workflows_yaml_path()
 
 
 def _build_state_machine(name: str, mission_def: dict) -> type[StateMachine]:
@@ -162,13 +164,7 @@ class WorkflowLoader:
             "fury": {"name": "Fury", "role": "Developer", "level": "specialist",
                      "mission": "build", "mcp_servers": ["github"], "heartbeat_offset": 10},
             "pepper": {"name": "Pepper", "role": "Developer", "level": "specialist",
-                       "mission": "build", "mcp_servers": ["github"], "heartbeat_offset": 12},
-            "loki": {"name": "Loki", "role": "Developer", "level": "specialist",
-                     "mission": "build", "mcp_servers": ["github"], "heartbeat_offset": 14},
-            "quill": {"name": "Quill", "role": "Infrastructure Ops — DigitalOcean Monitor", "level": "specialist",
-                      "mission": "build", "mcp_servers": ["digitalocean"], "heartbeat_offset": 16},
-            "wanda": {"name": "Wanda", "role": "Developer", "level": "specialist",
-                      "mission": "build", "mcp_servers": ["github"], "heartbeat_offset": 18},
+                       "mission": "build", "mcp_servers": ["github"], "heartbeat_offset": 12}
         }
         self._loaded = True
         logger.info("Using hardcoded workflow defaults (no workflows.yaml found)")

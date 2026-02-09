@@ -78,14 +78,18 @@ All agents are config-driven via `workflows.yaml`. Only Jarvis (lead orchestrati
 
 ### Scaling Agents
 
-Edit `~/.mission-control/workflows.yaml` to add or remove agents. Each agent ≈ 565 MB RAM.
+Edit `~/.mission-control/workflows.yaml` to add or remove agents. Default ships with **7 agents**.
 
-| Agents | RAM | Guidance |
-|--------|-----|----------|
-| 7 | ~5.2 GB | Default — full squad |
-| 5 | ~3.7 GB | Remove 2 specialists |
-| 3 | ~2.2 GB | Keep Jarvis, Friday, Vision |
-| 1 | ~0.8 GB | Jarvis only — single agent mode |
+**Memory estimate:** Each agent spawns a Copilot SDK session (~565 MB). The platform overhead (API, scheduler, MCP, DB) adds ~500 MB.
+
+| Agents | RAM (est.) | Guidance |
+|--------|------------|----------|
+| 7 | ~4.5 GB | Default — full squad (Jarvis, Vision, Friday, Wong, Shuri, Fury, Pepper) |
+| 5 | ~3.3 GB | Drop 2 specialists (e.g. remove Fury + Pepper) |
+| 3 | ~2.2 GB | Core trio: Jarvis (lead), Friday (dev), Vision (ops) |
+| 1 | ~1.1 GB | Jarvis only — single-agent mode |
+
+> **Note:** If `workflows.yaml` is missing, the system falls back to a hardcoded 7-agent squad matching the defaults above. There is no silent agent inflation.
 
 ## Task Workflow
 

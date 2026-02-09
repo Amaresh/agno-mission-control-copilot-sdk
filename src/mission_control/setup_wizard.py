@@ -336,12 +336,12 @@ def step_start_and_display(info: dict) -> None:
         "🤖 Agents:    http://localhost:8000/agents\n"
         "📡 Workflow:   http://localhost:8000/workflow\n"
         "🔌 MCP:       http://localhost:8000/mcp/servers\n\n"
-        "[bold]💾 Memory Profile (7 agents active):[/bold]\n"
-        "   ~5.2 GB RAM required (each agent ≈ 565 MB)\n\n"
+        "[bold]💾 Memory Profile (7 agents default):[/bold]\n"
+        "   ~4.5 GB RAM estimated (each agent ≈ 565 MB + ~500 MB platform)\n\n"
         "   Tight on RAM? Edit ~/.mission-control/workflows.yaml:\n"
-        "   • 4 GB → Remove 2 agents (keep 5): ~3.7 GB\n"
+        "   • 4 GB → Remove 2 specialists (keep 5): ~3.3 GB\n"
         "   • 2 GB → Keep 3 agents (Jarvis, Friday, Vision): ~2.2 GB\n"
-        "   • 1 GB → Single agent mode (Jarvis only): ~0.8 GB\n\n"
+        "   • 1 GB → Single agent mode (Jarvis only): ~1.1 GB\n\n"
         "   Run [bold]mc status[/bold] to see current memory usage.",
         title="Mission Control",
         border_style="green",
