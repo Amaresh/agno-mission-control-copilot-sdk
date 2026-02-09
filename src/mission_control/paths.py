@@ -37,7 +37,7 @@ def _find_project_root() -> Path | None:
         if toml.exists():
             try:
                 text = toml.read_text()
-                if 'name = "mission-control"' in text:
+                if "mission-control" in text and "[project]" in text:
                     return parent
             except OSError:
                 pass
