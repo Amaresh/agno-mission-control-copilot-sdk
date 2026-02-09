@@ -21,10 +21,10 @@ The 5-step execute loop:
 import time as _time
 
 import structlog
-from sqlalchemy import select, delete
+from sqlalchemy import delete, select
 
-from mission_control.mission_control.core.missions.base import BaseMission
 from mission_control.mission_control.core.actions import ActionRunner
+from mission_control.mission_control.core.missions.base import BaseMission
 from mission_control.mission_control.core.prompt_loader import PromptLoader
 
 logger = structlog.get_logger()
@@ -80,8 +80,15 @@ class GenericMission(BaseMission):
 
     async def execute(self) -> str:
         from mission_control.mission_control.core.database import (
-            AsyncSessionLocal, Task, TaskStatus, Activity, ActivityType,
-            Agent as AgentModel, TaskAssignment,
+            Activity,
+            ActivityType,
+            AsyncSessionLocal,
+            Task,
+            TaskAssignment,
+            TaskStatus,
+        )
+        from mission_control.mission_control.core.database import (
+            Agent as AgentModel,
         )
 
         task_id = self.task_id
@@ -314,7 +321,7 @@ class GenericMission(BaseMission):
 
     async def _reassign_to_next_agent(
         self, session, task, next_state: str,
-        AgentModel, TaskAssignment,
+        AgentModel, TaskAssignment,  # noqa: N803
     ):
         """Hand off task to the agent responsible for next_state."""
         state_agents = self._get_state_agents()

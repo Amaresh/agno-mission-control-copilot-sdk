@@ -3,14 +3,11 @@
 import asyncio
 import os
 from pathlib import Path
-from unittest.mock import AsyncMock, patch, MagicMock
-
-import pytest
+from unittest.mock import AsyncMock, MagicMock, patch
 
 # ---------------------------------------------------------------------------
 # PromptLoader tests
 # ---------------------------------------------------------------------------
-
 from mission_control.mission_control.core.prompt_loader import PromptLoader
 
 
@@ -87,7 +84,7 @@ class TestPromptLoader:
 # ActionRunner tests
 # ---------------------------------------------------------------------------
 
-from mission_control.mission_control.core.actions import ActionRunner, _ACTION_HANDLERS
+from mission_control.mission_control.core.actions import _ACTION_HANDLERS, ActionRunner
 
 
 class TestActionRunner:

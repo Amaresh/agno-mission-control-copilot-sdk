@@ -9,7 +9,6 @@ Usage:
     text = loader.render("content_research", task_title="My Title", context_data="...")
 """
 
-import os
 from pathlib import Path
 from typing import Any
 

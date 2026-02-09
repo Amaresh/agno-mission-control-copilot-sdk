@@ -1,6 +1,6 @@
 [project]
 name = "agno-mission-control"
-version = "0.1.2"
+version = "0.2.0"
 description = "Autonomous multi-agent AI orchestration system powered by GitHub Copilot SDK"
 readme = "README.md"
 requires-python = ">=3.11"

@@ -17,8 +17,8 @@ logger = structlog.get_logger()
 
 async def ensure_mission_states():
     """Register any custom mission states from workflows.yaml into the DB + Python enum."""
-    from mission_control.mission_control.core.workflow_loader import get_workflow_loader
     from mission_control.mission_control.core.database import TaskStatus, engine
+    from mission_control.mission_control.core.workflow_loader import get_workflow_loader
 
     loader = get_workflow_loader()
     loader.ensure_loaded()
@@ -45,6 +45,7 @@ async def ensure_mission_states():
     db_url = str(engine.url)
     if "postgresql" in db_url:
         from sqlalchemy import text
+
         from mission_control.mission_control.core.database import AsyncSessionLocal
 
         async with AsyncSessionLocal() as session:
