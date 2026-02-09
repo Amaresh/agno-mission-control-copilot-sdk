@@ -14,6 +14,12 @@ import requests
 
 BASE = "http://localhost:8000"
 
+# Skip entire module when server isn't running (e.g. in CI)
+try:
+    requests.get(BASE + "/health", timeout=2)
+except Exception:
+    pytest.skip("Live server not available", allow_module_level=True)
+
 
 # ---------------------------------------------------------------------------
 # Helpers
