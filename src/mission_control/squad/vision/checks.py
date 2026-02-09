@@ -720,6 +720,13 @@ async def check_review_without_prs() -> List[HealthCheckResult]:
             # Review tasks don't produce their own PRs — skip
             if task.mission_type == "review":
                 continue
+            # Skip missions whose verify_strategy is not "pr"
+            from mission_control.mission_control.core.workflow_loader import get_workflow_loader
+            _vs = get_workflow_loader().get_mission_config(
+                task.mission_type or "build"
+            ).get("verify_strategy", "pr")
+            if _vs != "pr":
+                continue
 
             # Get repo from mission_config (preferred) or description (fallback)
             config = task.mission_config or {}
@@ -916,9 +923,316 @@ async def check_repo_clean() -> List[HealthCheckResult]:
 
 
 # ---------------------------------------------------------------------------
+# 11. CPU temperature — alert before thermal throttling
+# ---------------------------------------------------------------------------
+async def check_cpu_temperature() -> List[HealthCheckResult]:
+    results = []
+
+    try:
+        temps = []
+        for zone in sorted(
+            f for f in os.listdir("/sys/class/thermal/")
+            if f.startswith("thermal_zone")
+        ):
+            try:
+                with open(f"/sys/class/thermal/{zone}/temp") as f:
+                    t = int(f.read().strip()) / 1000
+                    temps.append(t)
+            except (OSError, ValueError):
+                continue
+
+        if not temps:
+            results.append(HealthCheckResult(
+                "cpu_temp", True, "No thermal zones found (VM?)"))
+            return results
+
+        max_temp = max(temps)
+        if max_temp >= 90:
+            results.append(HealthCheckResult(
+                "cpu_temp", False,
+                f"CPU {max_temp:.0f}°C — thermal throttling! "
+                f"Zones: {[f'{t:.0f}' for t in temps]}",
+                severity="critical",
+            ))
+        elif max_temp >= 80:
+            results.append(HealthCheckResult(
+                "cpu_temp", False,
+                f"CPU {max_temp:.0f}°C — running hot. "
+                f"Zones: {[f'{t:.0f}' for t in temps]}",
+                severity="warning",
+            ))
+        else:
+            results.append(HealthCheckResult(
+                "cpu_temp", True, f"CPU {max_temp:.0f}°C (zones: {len(temps)})"))
+
+    except Exception as e:
+        results.append(HealthCheckResult(
+            "cpu_temp", False, f"Temp check failed: {e}", severity="warning"))
+
+    return results
+
+
+# ---------------------------------------------------------------------------
+# 12. Disk usage — alert before running out of space
+# ---------------------------------------------------------------------------
+async def check_disk_usage() -> List[HealthCheckResult]:
+    results = []
+
+    try:
+        out = subprocess.check_output(
+            ["df", "-h", "/"], text=True, timeout=5,
+        )
+        parts = out.strip().split("\n")[-1].split()
+        use_pct = int(parts[4].rstrip("%"))
+        avail = parts[3]
+
+        if use_pct >= 90:
+            results.append(HealthCheckResult(
+                "disk", False,
+                f"Disk {use_pct}% full — only {avail} free!",
+                severity="critical",
+            ))
+        elif use_pct >= 80:
+            results.append(HealthCheckResult(
+                "disk", False,
+                f"Disk {use_pct}% full — {avail} free",
+                severity="warning",
+            ))
+        else:
+            results.append(HealthCheckResult(
+                "disk", True, f"Disk {use_pct}% ({avail} free)"))
+
+    except Exception as e:
+        results.append(HealthCheckResult(
+            "disk", False, f"Disk check failed: {e}", severity="warning"))
+
+    return results
+
+
+# ---------------------------------------------------------------------------
+# 13. Load average — sustained high CPU
+# ---------------------------------------------------------------------------
+async def check_load_average() -> List[HealthCheckResult]:
+    results = []
+
+    try:
+        load1, load5, load15 = os.getloadavg()
+        cpus = os.cpu_count() or 1
+
+        if load5 > cpus * 2:
+            results.append(HealthCheckResult(
+                "load", False,
+                f"Load avg {load1:.1f}/{load5:.1f}/{load15:.1f} "
+                f"({cpus} CPUs) — severely overloaded",
+                severity="critical",
+            ))
+        elif load5 > cpus * 1.5:
+            results.append(HealthCheckResult(
+                "load", False,
+                f"Load avg {load1:.1f}/{load5:.1f}/{load15:.1f} "
+                f"({cpus} CPUs) — high",
+                severity="warning",
+            ))
+        else:
+            results.append(HealthCheckResult(
+                "load", True,
+                f"Load avg {load1:.1f}/{load5:.1f}/{load15:.1f} ({cpus} CPUs)"))
+
+    except Exception as e:
+        results.append(HealthCheckResult(
+            "load", False, f"Load check failed: {e}", severity="warning"))
+
+    return results
+
+
+# ---------------------------------------------------------------------------
+# 14. Top memory consumers — flag process bloat
+# ---------------------------------------------------------------------------
+async def check_top_memory_consumers() -> List[HealthCheckResult]:
+    """Identify top RSS consumers and flag if any single process is too large."""
+    results = []
+
+    try:
+        out = subprocess.check_output(
+            ["ps", "aux", "--sort=-rss"], text=True, timeout=5,
+        )
+        lines = out.strip().split("\n")[1:]  # skip header
+
+        top_procs = []
+        for line in lines[:15]:
+            parts = line.split(None, 10)
+            if len(parts) < 11:
+                continue
+            rss_kb = int(parts[5])
+            rss_mb = rss_kb / 1024
+            cmd = parts[10][:60]
+            pid = int(parts[1])
+            cpu_pct = float(parts[2])
+            top_procs.append((pid, rss_mb, cpu_pct, cmd))
+
+        categories: dict = {}
+        for pid, rss_mb, cpu_pct, cmd in top_procs:
+            if "chromium" in cmd or "chrome" in cmd:
+                cat = "chromium"
+            elif "copilot" in cmd and "python" not in cmd:
+                cat = "copilot-cli"
+            elif "python" in cmd and "mission" in cmd:
+                cat = "mission-control"
+            elif "python" in cmd:
+                cat = "python-other"
+            else:
+                cat = "other"
+            if cat not in categories:
+                categories[cat] = {"count": 0, "total_mb": 0}
+            categories[cat]["count"] += 1
+            categories[cat]["total_mb"] += rss_mb
+
+        for cat, info in sorted(categories.items(), key=lambda x: -x[1]["total_mb"]):
+            if info["total_mb"] > 2048:
+                results.append(HealthCheckResult(
+                    f"mem_{cat}", False,
+                    f"{cat}: {info['count']} procs, {info['total_mb']:.0f}MB total",
+                    severity="warning",
+                ))
+            elif info["total_mb"] > 500:
+                results.append(HealthCheckResult(
+                    f"mem_{cat}", True,
+                    f"{cat}: {info['count']} procs, {info['total_mb']:.0f}MB"))
+
+        for pid, rss_mb, cpu_pct, cmd in top_procs:
+            if rss_mb > 1500:
+                results.append(HealthCheckResult(
+                    "mem_bloat", False,
+                    f"PID {pid} using {rss_mb:.0f}MB: {cmd}",
+                    severity="warning",
+                ))
+
+        if not results:
+            results.append(HealthCheckResult(
+                "top_memory", True, "No memory concerns"))
+
+    except Exception as e:
+        results.append(HealthCheckResult(
+            "top_memory", False, f"Memory audit failed: {e}", severity="warning"))
+
+    return results
+
+
+# ---------------------------------------------------------------------------
+# 15. Orphaned MC python processes — beyond the expected service set
+# ---------------------------------------------------------------------------
+EXPECTED_PYTHON_SERVICES = {
+    "mission_control.scheduler_main",
+    "mission_control.api:app",
+    "mission_control.telegram_bot",
+    "mission_control.mission_control.mcp.mission_control_server",
+}
+
+
+async def check_orphaned_python() -> List[HealthCheckResult]:
+    """Detect MC-related python processes that aren't expected services."""
+    results = []
+
+    try:
+        out = subprocess.check_output(["ps", "aux"], text=True, timeout=5)
+        mc_procs = []
+        for line in out.strip().split("\n"):
+            if "python" in line and "mission" in line:
+                if "grep" in line:
+                    continue
+                parts = line.split(None, 10)
+                pid = int(parts[1])
+                cmd = parts[10] if len(parts) > 10 else ""
+                mc_procs.append((pid, cmd))
+
+        orphans = []
+        for pid, cmd in mc_procs:
+            is_expected = any(svc in cmd for svc in EXPECTED_PYTHON_SERVICES)
+            if not is_expected:
+                orphans.append((pid, cmd[:80]))
+
+        if orphans:
+            for pid, cmd in orphans:
+                results.append(HealthCheckResult(
+                    "orphan_python", False,
+                    f"Orphaned PID {pid}: {cmd}",
+                    severity="warning",
+                ))
+        else:
+            results.append(HealthCheckResult(
+                "orphan_python", True,
+                f"{len(mc_procs)} MC python processes (all expected)"))
+
+    except Exception as e:
+        results.append(HealthCheckResult(
+            "orphan_python", False, f"Orphan check failed: {e}",
+            severity="warning"))
+
+    return results
+
+
+# ---------------------------------------------------------------------------
+# 16. Pipeline health — tasks stuck in any mission's custom pipeline states
+# ---------------------------------------------------------------------------
+async def check_pipeline_health() -> List[HealthCheckResult]:
+    """Check for tasks stuck in pipeline states too long (any mission)."""
+    results = []
+
+    try:
+        from mission_control.mission_control.core.workflow_loader import (
+            get_workflow_loader,
+        )
+        _all_states = get_workflow_loader().get_all_mission_states()
+        pipeline_statuses = []
+        for s in _all_states:
+            if hasattr(TaskStatus, s):
+                pipeline_statuses.append(TaskStatus[s])
+        if not pipeline_statuses:
+            results.append(HealthCheckResult(
+                "pipeline_health", True,
+                "No custom pipeline states configured"))
+            return results
+
+        async with AsyncSessionLocal() as session:
+            now = datetime.now(timezone.utc)
+            stmt = select(Task).where(
+                Task.status.in_(pipeline_statuses + [TaskStatus.REVIEW]),
+            )
+            result = await session.execute(stmt)
+            tasks = result.scalars().all()
+
+            stuck = []
+            for t in tasks:
+                if t.updated_at:
+                    age_hours = (now - t.updated_at).total_seconds() / 3600
+                    if age_hours > 12:
+                        stuck.append((
+                            t.title[:40], t.status.name, f"{age_hours:.0f}h"))
+
+            if stuck:
+                for title, status, age in stuck:
+                    results.append(HealthCheckResult(
+                        "pipeline_stuck", False,
+                        f"Task stuck {age} in {status}: {title}",
+                        severity="warning",
+                    ))
+            else:
+                active = len(tasks)
+                results.append(HealthCheckResult(
+                    "pipeline_health", True,
+                    f"{active} pipeline tasks (all moving)"))
+
+    except Exception as e:
+        results.append(HealthCheckResult(
+            "pipeline_health", False, f"Pipeline check failed: {e}",
+            severity="warning"))
+
+    return results
+
+
+# ---------------------------------------------------------------------------
 # Master checklist — run all checks
 # ---------------------------------------------------------------------------
-# Import temporary review cycle (runs last — includes a 5-min wait)
 from mission_control.squad.vision.review_cycle import check_code_reviews
 
 ALL_CHECKS = [
@@ -932,6 +1246,12 @@ ALL_CHECKS = [
     check_review_without_prs,
     check_long_running_tasks,
     check_repo_clean,
+    check_cpu_temperature,
+    check_disk_usage,
+    check_load_average,
+    check_top_memory_consumers,
+    check_orphaned_python,
+    check_pipeline_health,
     check_code_reviews,       # TEMPORARY — remove after initial review complete
 ]
 

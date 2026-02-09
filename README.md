@@ -21,12 +21,12 @@ That's it. The wizard detects your system, authenticates GitHub, sets up the dat
 
 Mission Control is a **mission-driven agent orchestration platform**. You define missions (state machines), guards (transition checks), and agents (YAML config) — the platform handles scheduling, coordination, health monitoring, and learning.
 
-- **Flexible missions** — ship with `build` (branch → code → PR) and `verify` (review → approve), but define any workflow as a YAML state machine
+- **Flexible missions** — ships with `build` (branch → code → PR), `content` (research → write → review → publish → promote), and `verify` (review → approve) — or define any workflow as a YAML state machine
 - **Config-driven agents** — 7 default, add more by copying a YAML block. No code per agent.
 - **Deterministic guards** — transitions gated by factual checks (PR exists? branch created? files valid?), never by LLM output
 - **GitHub Copilot SDK** (GPT-4.1) as LLM — runs on modest hardware, no local GPU needed
-- **MCP tool integration** — GitHub, Telegram, DigitalOcean, or plug in your own
-- **Vision Healer** — 10 automated health checks hourly, auto-fixes issues deterministically
+- **BYOK MCP tools** — GitHub ships built-in. Bring Your Own Keys for Telegram, Tavily, DigitalOcean, Twilio, or any MCP server. Add new tools by dropping an entry in `mcp_servers.yaml`.
+- **Vision Healer** — 16 automated health checks hourly (CPU, disk, memory, pipeline, services), auto-fixes deterministically
 - **Built-in dashboard** — Kanban board, agent status, activity feed, learning analytics
 - **SQLite or PostgreSQL** — zero-config SQLite default, PostgreSQL for production
 
@@ -241,15 +241,24 @@ mc stop && mc start
 
 Agents get their capabilities from [MCP servers](https://modelcontextprotocol.io/) — pluggable tool providers defined in `mcp_servers.yaml`. Every agent also gets the built-in `mission-control` MCP server automatically (task/agent/document operations).
 
-### Shipped Servers
+### Core Server (ships built-in)
 
 | Server | Package | What It Does |
 |--------|---------|-------------|
 | `github` | `@modelcontextprotocol/server-github` | Repos, issues, PRs, branches, code search |
-| `digitalocean` | `@digitalocean/mcp` | Apps, databases, droplets, deployments |
-| `telegram` | `@zhigang1992/telegram-mcp` | Send/receive Telegram messages |
-| `tavily` | `tavily-mcp` | Web search and research |
-| `twilio` | `twilio-mcp` | SMS and WhatsApp messaging |
+
+### BYOK (Bring Your Own Keys) Add-ons
+
+These servers ship pre-configured — just provide API keys and they activate:
+
+| Server | Package | What It Does | Required Key |
+|--------|---------|-------------|-------------|
+| `telegram` | `@zhigang1992/telegram-mcp` | Send/receive Telegram messages | `TELEGRAM_BOT_TOKEN` |
+| `tavily` | `tavily-mcp` | Web search and research | `TAVILY_API_KEY` |
+| `digitalocean` | `@digitalocean/mcp` | Apps, databases, droplets, deployments | `DO_API_TOKEN` |
+| `twilio` | `twilio-mcp` | SMS and WhatsApp messaging | `TWILIO_ACCOUNT_SID` |
+
+> **BYOK philosophy:** Only `GITHUB_TOKEN` is required. Every other integration is optional — bring your own API keys to unlock more capabilities. No keys = the server is simply skipped.
 
 ### Adding Your Own
 
@@ -338,14 +347,22 @@ Example configs are provided in [`examples/missions/`](examples/missions/).
 
 ### Environment Variables
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `GITHUB_TOKEN` | Yes | GitHub PAT with `repo` + `copilot` scopes |
-| `DATABASE_URL` | — | Default: SQLite. Set `postgresql://...` for PG |
-| `TELEGRAM_BOT_TOKEN` | Recommended | Without it, dashboard is your only visibility |
-| `TELEGRAM_CHAT_ID` | With Telegram | Your Telegram chat ID |
-| `DO_API_TOKEN` | — | DigitalOcean (for infra monitoring agent, if added) |
-| `TAVILY_API_KEY` | — | Web search for agents |
+**Required:**
+
+| Variable | Description |
+|----------|-------------|
+| `GITHUB_TOKEN` | GitHub PAT with `repo` + `copilot` scopes |
+
+**Optional / BYOK:**
+
+| Variable | Description |
+|----------|-------------|
+| `DATABASE_URL` | Default: SQLite. Set `postgresql://...` for PostgreSQL |
+| `TELEGRAM_BOT_TOKEN` | Telegram notifications (recommended for visibility) |
+| `TELEGRAM_CHAT_ID` | Your Telegram chat ID (required with Telegram) |
+| `TAVILY_API_KEY` | Web search for content research agents |
+| `DO_API_TOKEN` | DigitalOcean infra monitoring |
+| `TWILIO_ACCOUNT_SID` | Twilio SMS/WhatsApp notifications |
 
 ## HTTP API & Dashboard
 
@@ -402,7 +419,7 @@ All endpoints are served by `mc-api` on port 8000. Full interactive docs at `/do
 
 ## Vision Healer — Health Checks
 
-10 deterministic checks run hourly (no LLM involved in detection):
+16 deterministic checks run hourly (no LLM involved in detection):
 
 | # | Check | Auto-Fix |
 |---|-------|----------|
@@ -413,9 +430,15 @@ All endpoints are served by `mc-api` on port 8000. Full interactive docs at `/do
 | 5 | INBOX tasks with assignees | Transition → ASSIGNED |
 | 6 | Log bloat (>50MB) | Truncate log files |
 | 7 | Memory/swap pressure | Alert human |
-| 8 | REVIEW tasks without PRs | Reset → ASSIGNED |
+| 8 | REVIEW tasks without PRs (respects verify_strategy) | Reset → ASSIGNED |
 | 9 | Long-running tasks (>3h soft / >6h hard) | Alert or reset |
 | 10 | Repo cleanliness (unauthorized changes) | Revert changes |
+| 11 | CPU temperature (>80°C warning, >90°C critical) | Alert human |
+| 12 | Disk usage (>80% warning, >90% critical) | Alert human |
+| 13 | Load average (sustained high CPU) | Alert human |
+| 14 | Top memory consumers (per-category audit) | Flag bloat |
+| 15 | Orphaned python processes | Flag for cleanup |
+| 16 | Pipeline health (tasks stuck >12h in any stage) | Alert human |
 
 ## Development
 
