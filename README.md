@@ -4,7 +4,7 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![PyPI](https://img.shields.io/badge/TestPyPI-v0.1.1-orange)](https://test.pypi.org/project/agno-mission-control/)
 
-> **A squad of AI agents that writes code, opens PRs, reviews work, and ships software — while you're away from your desk.** Send a task via Telegram from your phone, and your agents pick it up, break it down, implement it, and report back. The entire system runs on modest hardware (even a $12 cloud server) because all LLM inference is delegated to GitHub Copilot SDK — no local GPU, no expensive API bills. The Agno framework silently learns from every interaction: each heartbeat, each error fix, each completed task feeds back into agent prompts, so your squad gets measurably better at your codebase over days and weeks without any manual tuning.
+> **A self-orchestrating AI agent platform that runs autonomous missions — not just code, but any workflow you can define.** Ship a build mission that branches, codes, and opens PRs. Define a deploy mission that stages, validates, and promotes to production. Create a monitoring mission that watches your infrastructure and self-heals. Or invent your own — missions are YAML state machines with guard-gated transitions, and agents are config entries, not code. The entire system runs on modest hardware (even a $12 cloud server) because all LLM inference is delegated to GitHub Copilot SDK — no local GPU, no expensive API bills. The Agno framework silently learns from every interaction, so your squad gets measurably better at your workflows over days and weeks without manual tuning.
 
 > **Inspiration:** This project was inspired by [Bhanu Teja P's (@pbteja1998)](https://x.com/pbteja1998) original [Mission Control thread](https://x.com/pbteja1998/status/2017662163540971756) — a squad of autonomous AI agents led by Jarvis that create work, claim tasks, communicate, review each other, and collaborate as a real team. That vision is the foundation this project builds on, adapted for GitHub Copilot SDK and the Agno framework.
 
@@ -19,13 +19,15 @@ That's it. The wizard detects your system, authenticates GitHub, sets up the dat
 
 ## What It Does
 
-- **7 agents** by default — config-driven, zero custom code per agent
-- **GitHub Copilot SDK** (GPT-4.1) as primary LLM — runs on modest hardware, no local GPU needed
-- **MCP tool integration** — GitHub, Telegram, DigitalOcean, custom tools
-- **Deterministic health monitoring** — Vision Healer runs 10 automated checks hourly
-- **Built-in Kanban dashboard** — real-time task board with agent status and activity feed
-- **Learning analytics** — event timelines, per-agent performance, pattern discovery
-- **PR enforcement** — every task must produce a PR; transitions are fact-gated
+Mission Control is a **mission-driven agent orchestration platform**. You define missions (state machines), guards (transition checks), and agents (YAML config) — the platform handles scheduling, coordination, health monitoring, and learning.
+
+- **Flexible missions** — ship with `build` (branch → code → PR) and `verify` (review → approve), but define any workflow as a YAML state machine
+- **Config-driven agents** — 7 default, add more by copying a YAML block. No code per agent.
+- **Deterministic guards** — transitions gated by factual checks (PR exists? branch created? files valid?), never by LLM output
+- **GitHub Copilot SDK** (GPT-4.1) as LLM — runs on modest hardware, no local GPU needed
+- **MCP tool integration** — GitHub, Telegram, DigitalOcean, or plug in your own
+- **Vision Healer** — 10 automated health checks hourly, auto-fixes issues deterministically
+- **Built-in dashboard** — Kanban board, agent status, activity feed, learning analytics
 - **SQLite or PostgreSQL** — zero-config SQLite default, PostgreSQL for production
 
 ## Architecture
@@ -97,17 +99,28 @@ Edit `~/.mission-control/workflows.yaml` to add or remove agents. Default ships 
 
 > **Note:** If `workflows.yaml` is missing, the system falls back to a hardcoded 7-agent squad matching the defaults above. There is no silent agent inflation.
 
-## Task Workflow
+## Shipped Missions
+
+Two missions ship out of the box. Define your own in `workflows.yaml` — any state machine with guards.
+
+### `build` — Developer Workflow
 
 ```
-INBOX → ASSIGNED → IN_PROGRESS → REVIEW → DONE
-                       │            │
-                   (PR exists?) (Jarvis verifies)
-                       │            │
-                    No → ASSIGNED   No PR → ASSIGNED
+ASSIGNED → IN_PROGRESS → REVIEW → DONE
+               │            │
+           (PR exists?) (Jarvis verifies)
+               │            │
+            No → ASSIGNED   No PR → ASSIGNED
 ```
 
-**Mission core is pure workflow management.** Transitions are gated by factual checks (PR exists?), never by LLM response parsing. LLM output is stored as metadata for Vision to analyze asynchronously.
+### `verify` — Review Workflow
+
+```
+REVIEW → DONE        (if PR exists)
+REVIEW → ASSIGNED    (if no PR — send back)
+```
+
+**Mission core is pure workflow management.** Transitions are gated by deterministic guards (PR exists? branch created?), never by LLM response parsing. LLM output is stored as metadata for Vision to analyze asynchronously.
 
 ## CLI Commands
 
