@@ -1,0 +1,100 @@
+# Content Marketing Squad Mission — Example Config
+#
+# A content pipeline: research → write → review → publish → promote.
+# Paste this under `missions:` in workflows.yaml.
+
+missions:
+  content:
+    description: "Content pipeline: research → write → review → publish → promote"
+    initial_state: RESEARCH
+    verify_strategy: none          # No PR-based verification
+
+    default_config:
+      repository: owner/content-repo   # Set via MC_CONTENT_REPO env var
+
+    states:
+      - RESEARCH
+      - DRAFT
+      - PUBLISH
+      - PROMOTE
+
+    state_agents:
+      RESEARCH: "Trend Researcher"
+      DRAFT: "SEO Writer"
+      REVIEW: "Quality Editor"
+      PUBLISH: "Publisher"
+      PROMOTE: "Social Amplifier"
+
+    stages:
+      RESEARCH:
+        pre_actions:
+          - action: tavily_search
+            query: "{title} relevant keywords"
+            max_results: 5
+        prompt_base: content_base
+        prompt_template: content_research
+        post_actions:
+          - action: github_commit
+            path: "content/research/{short_id}-research.md"
+            message: "research: {title}"
+      DRAFT:
+        pre_actions:
+          - action: github_read
+            path: "content/research/{short_id}-research.md"
+        prompt_base: content_base
+        prompt_template: content_draft
+        post_actions:
+          - action: github_commit
+            path: "content/drafts/{short_id}-article.md"
+            message: "draft: {title}"
+      REVIEW:
+        pre_actions:
+          - action: github_read
+            path: "content/drafts/{short_id}-article.md"
+        prompt_base: content_base
+        prompt_template: content_review
+        post_check: review_approved
+        post_actions:
+          - action: github_commit
+            path: "content/drafts/{short_id}-article.md"
+            message: "review: [approved] {title}"
+      PUBLISH:
+        pre_actions:
+          - action: github_read
+            path: "content/drafts/{short_id}-article.md"
+        prompt_base: content_base
+        prompt_template: content_publish
+        post_actions:
+          - action: github_commit
+            path: "content/published/{short_id}-article.md"
+            message: "publish: {title}"
+      PROMOTE:
+        pre_actions:
+          - action: github_read
+            path: "content/published/{short_id}-article.md"
+        prompt_base: content_base
+        prompt_template: content_promote
+        post_actions:
+          - action: github_commit
+            path: "content/social/{short_id}-social.md"
+            message: "promote: social posts for {title}"
+
+    transitions:
+      - from: RESEARCH
+        guard: has_research
+        to: DRAFT
+      - from: DRAFT
+        guard: has_draft
+        to: REVIEW
+      - from: REVIEW
+        guard: quality_approved
+        to: PUBLISH
+      - from: REVIEW
+        guard: needs_revision
+        to: DRAFT
+      - from: PUBLISH
+        guard: is_published
+        to: PROMOTE
+      - from: PROMOTE
+        guard: has_social_posts
+        to: DONE

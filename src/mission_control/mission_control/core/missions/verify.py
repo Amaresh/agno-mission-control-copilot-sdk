@@ -75,6 +75,16 @@ class VerifyMission(BaseMission):
                     reason="not in REVIEW status",
                 )
 
+            # Check verify_strategy from config — skip missions that don't use PR verification
+            from mission_control.mission_control.core.workflow_loader import get_workflow_loader
+            _vs = get_workflow_loader().get_mission_config(task.mission_type).get("verify_strategy", "pr")
+            if _vs != "pr":
+                return VerifyResult(
+                    task_id=str(task_id), title=title,
+                    outcome=VerifyOutcome.SKIPPED,
+                    reason=f"verify_strategy={_vs}, not pr",
+                )
+
             # Review tasks don't produce their own PRs — auto-approve via metadata
             if task.mission_type == "review":
                 task.status = TaskStatus.DONE
@@ -120,7 +130,7 @@ class VerifyMission(BaseMission):
                     )
 
             # Final fallback: check the default review repo if different
-            default_repo = "Amaresh/mission-control-review"
+            default_repo = self.config.get("review_repo", repo_name)
             if not pr_found and repo_name != default_repo:
                 pr_found, pr_url = await has_open_pr_for_task(default_repo, short_id)
                 if not pr_found and agent_name:

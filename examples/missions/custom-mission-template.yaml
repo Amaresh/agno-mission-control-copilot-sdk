@@ -1,0 +1,82 @@
+# Custom Mission Template
+#
+# Copy this file, fill in the blanks, and paste under `missions:` in workflows.yaml.
+# Then create matching prompt .md files in agents/prompts/.
+# That's it — zero Python code needed!
+
+missions:
+  # ── Replace "my_mission" with your mission type name ──
+  my_mission:
+    description: "Describe what this mission does"
+    initial_state: STEP_ONE          # First state for new tasks
+    verify_strategy: none            # pr | file | none
+
+    default_config:
+      repository: owner/target-repo  # Default repo for tasks
+
+    # ── Custom states (auto-registered in the database) ──
+    states:
+      - STEP_ONE
+      - STEP_TWO
+      # Add more states as needed
+
+    # ── Which agent role handles each state ──
+    state_agents:
+      STEP_ONE: "Agent Role A"       # Must match an agent's `role:` field
+      STEP_TWO: "Agent Role B"
+
+    # ── Per-state execution config ──
+    stages:
+      STEP_ONE:
+        # Gather context before the LLM runs
+        pre_actions:
+          - action: tavily_search         # Web search
+            query: "{title} keywords"
+            max_results: 5
+          # - action: github_read          # Read a file
+          #   path: "docs/{short_id}.md"
+
+        # Prompt templates (in agents/prompts/)
+        # prompt_base: my_base            # Optional shared base
+        prompt_template: my_step_one      # → agents/prompts/my_step_one.md
+
+        # Persist results after LLM runs
+        post_actions:
+          - action: github_commit
+            path: "output/{short_id}-step1.md"
+            message: "step1: {title}"
+
+      STEP_TWO:
+        pre_actions:
+          - action: github_read
+            path: "output/{short_id}-step1.md"
+        prompt_template: my_step_two
+        # post_check: pr_exists           # Gate: only advance when condition met
+        post_actions:
+          - action: github_commit
+            path: "output/{short_id}-final.md"
+            message: "final: {title}"
+
+    # ── State machine transitions ──
+    transitions:
+      - from: STEP_ONE
+        to: STEP_TWO
+        # guard: my_guard                 # Optional guard condition
+      - from: STEP_TWO
+        to: DONE
+
+# ── Don't forget to also define agents! ──
+# agents:
+#   my-agent-a:
+#     name: AgentA
+#     role: "Agent Role A"
+#     model: claude-sonnet-4-20250514
+#     instructions: "You are Agent A..."
+#     mcp_servers: [github, tavily]
+#
+#   my-agent-b:
+#     name: AgentB
+#     role: "Agent Role B"
+#     model: claude-sonnet-4-20250514
+#     instructions: "You are Agent B..."
+#     mcp_servers: [github]

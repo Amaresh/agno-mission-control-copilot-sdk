@@ -82,12 +82,19 @@ class GenericAgent(BaseAgent):
                 }
 
             # Resume IN_PROGRESS task if one exists (prevents deadlock)
+            # Also check custom pipeline states from config
+            pipeline_states = [TaskStatus.IN_PROGRESS]
+            custom_states = get_workflow_loader().get_all_mission_states()
+            builtin = {"ASSIGNED", "IN_PROGRESS", "REVIEW", "DONE"}
+            for s in custom_states:
+                if s not in builtin and hasattr(TaskStatus, s):
+                    pipeline_states.append(TaskStatus(s))
             stmt = (
                 select(Task)
                 .join(TaskAssignment, TaskAssignment.task_id == Task.id)
                 .where(
                     TaskAssignment.agent_id == agent.id,
-                    Task.status == TaskStatus.IN_PROGRESS,
+                    Task.status.in_(pipeline_states),
                 )
                 .limit(1)
             )
@@ -195,14 +202,18 @@ class GenericAgent(BaseAgent):
             mission_config = work.get("mission_config", {})
 
             from mission_control.mission_control.core.missions import get_mission
+            from mission_control.mission_control.core.missions.generic import GenericMission
             MissionClass = get_mission(work.get("mission_type", "build"))
-            mission = MissionClass(
+            kwargs = dict(
                 agent=self,
                 task_id=task_id,
                 title=title,
                 description=description,
                 mission_config=mission_config,
             )
+            if MissionClass is GenericMission:
+                kwargs["mission_type"] = work.get("mission_type", "build")
+            mission = MissionClass(**kwargs)
             return await mission.execute()
 
         elif work_type == "review_tasks":

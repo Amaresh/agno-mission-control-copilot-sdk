@@ -182,12 +182,26 @@ class WorkflowLoader:
         return self._missions.get(mission_type, self._missions.get("build", {}))
 
     def get_mission_class(self, mission_type: str):
-        """Get the mission execution class (BuildMission/VerifyMission)."""
+        """Get the mission execution class — GenericMission for all non-verify."""
         self.ensure_loaded()
-        from mission_control.mission_control.core.missions.build import BuildMission
         from mission_control.mission_control.core.missions.verify import VerifyMission
-        _CLASS_MAP = {"build": BuildMission, "verify": VerifyMission}
-        return _CLASS_MAP.get(mission_type, BuildMission)
+        if mission_type == "verify":
+            return VerifyMission
+        from mission_control.mission_control.core.missions.generic import GenericMission
+        return GenericMission
+
+    def get_all_mission_states(self) -> list[str]:
+        """Collect custom states from all missions in config."""
+        self.ensure_loaded()
+        states = []
+        for mdef in self._missions.values():
+            states.extend(mdef.get("states", []))
+        return states
+
+    def get_mission_config(self, mission_type: str) -> dict:
+        """Get the full mission config dict including stages."""
+        self.ensure_loaded()
+        return self._missions.get(mission_type, {})
 
     def get_state_machine(self, mission_type: str) -> type[StateMachine] | None:
         """Get the state machine class for validation."""

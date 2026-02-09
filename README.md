@@ -306,6 +306,14 @@ All config lives in `~/.mission-control/` (or project root in dev mode):
 | `workflows.yaml` | Agent definitions, missions, state transitions, guards |
 | `mcp_servers.yaml` | MCP server definitions (command, args, env keys) |
 
+### Custom Missions
+
+Define entirely new mission types with **zero Python code** — just `workflows.yaml` + prompt `.md` files.
+See the **[Custom Missions Guide](docs/CUSTOM_MISSIONS.md)** for the full schema reference,
+built-in actions, prompt authoring, and a step-by-step walkthrough.
+
+Example configs are provided in [`examples/missions/`](examples/missions/).
+
 ### Environment Variables
 
 | Variable | Required | Description |
@@ -390,7 +398,7 @@ All endpoints are served by `mc-api` on port 8000. Full interactive docs at `/do
 ## Development
 
 ```bash
-git clone https://github.com/Amaresh/agno-mission-control-copilot-sdk.git
+git clone https://github.com/your-org/agno-mission-control-copilot-sdk.git
 cd agno-mission-control-copilot-sdk
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"

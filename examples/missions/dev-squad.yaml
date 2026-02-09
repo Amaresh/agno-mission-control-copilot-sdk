@@ -1,0 +1,40 @@
+# Dev Squad Mission — Example Config
+#
+# A software development pipeline where agents write code, create PRs,
+# and get them reviewed. Paste this under `missions:` in workflows.yaml.
+
+missions:
+  build:
+    description: "Dev pipeline: assign → code → review → done"
+    initial_state: ASSIGNED
+    verify_strategy: pr           # Vision checks for open PRs
+
+    states:
+      - IN_PROGRESS
+
+    state_agents:
+      ASSIGNED: Developer
+      IN_PROGRESS: Developer
+      REVIEW: Developer
+
+    stages:
+      ASSIGNED:
+        pre_actions:
+          - action: ensure_branch
+            base: "{source_branch}"
+            branch: "{branch_name}"
+            repository: "{owner}/{repo}"
+        prompt_template: build_dev
+      IN_PROGRESS:
+        post_check: pr_exists     # Advances to REVIEW when PR exists
+        prompt_template: build_dev
+
+    transitions:
+      - from: ASSIGNED
+        to: IN_PROGRESS
+      - from: IN_PROGRESS
+        guard: has_open_pr
+        to: REVIEW
+      - from: IN_PROGRESS
+        guard: has_error
+        to: ASSIGNED
