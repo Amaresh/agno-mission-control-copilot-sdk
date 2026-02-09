@@ -5,8 +5,8 @@
 ## Quick Start
 
 ```bash
-pipx install mission-control   # or: pip install mission-control
-mc setup                        # interactive wizard — configures everything
+pipx install agno-mission-control   # or: pip install agno-mission-control
+mc setup                             # interactive wizard — configures everything
 ```
 
 That's it. The wizard detects your system, authenticates GitHub, sets up the database, seeds agents, installs services, and starts them.
@@ -122,6 +122,80 @@ mc seed-agents                    # Seed agent records
 mc telegram                       # Start Telegram bot (foreground)
 ```
 
+## Workflows & Missions
+
+Workflows are defined in `workflows.yaml` — no code changes needed to add agents or missions.
+
+### Adding an Agent
+
+Copy any specialist block and change the fields:
+
+```yaml
+agents:
+  new_agent:
+    name: NewAgent
+    role: Your Role Description
+    level: specialist           # or: lead
+    mission: build              # which mission this agent executes
+    heartbeat_offset: 14        # minutes offset (stagger to avoid collisions)
+    mcp_servers:
+      - github                  # tools this agent can use
+```
+
+Special fields:
+- `agent_class: healer` — use Vision's deterministic healer (only one instance)
+- `heartbeat_interval: 3600` — override default 15-min heartbeat (seconds)
+- `always_run.prompt` — execute this prompt every heartbeat (e.g. monitoring)
+
+### Creating a Mission
+
+Missions define state machines. Each transition can have a guard (factual check):
+
+```yaml
+missions:
+  deploy:
+    description: "Deploy workflow: build → staging → production"
+    initial_state: PENDING
+    default_config:
+      target_env: staging
+    transitions:
+      - from: PENDING
+        to: BUILDING
+      - from: BUILDING
+        to: STAGING
+        guard: has_open_pr
+      - from: STAGING
+        to: PRODUCTION
+        guard: files_changed_ok
+```
+
+### Available Guards
+
+Guards are deterministic checks — no LLM involved:
+
+| Guard | Description |
+|-------|-------------|
+| `has_open_pr` | Task has an open PR on GitHub |
+| `no_open_pr` | Task has no open PR |
+| `has_branch` | Feature branch exists |
+| `has_error` | Last agent run produced an error |
+| `files_changed_ok` | Changed files pass validation |
+| `is_stale` | Task inactive for >90 min (configurable) |
+
+Query available guards at runtime: `GET /workflow/guards`
+
+### Hot-Reload
+
+Workflow config can be updated without restarting:
+
+```bash
+# Via API
+curl -X POST http://localhost:8000/workflow -d @workflows.yaml
+
+# Via CLI (restart scheduler to pick up agent changes)
+mc stop && mc start
+```
+
 ## Configuration
 
 All config lives in `~/.mission-control/` (or project root in dev mode):
@@ -140,24 +214,61 @@ All config lives in `~/.mission-control/` (or project root in dev mode):
 | `DATABASE_URL` | — | Default: SQLite. Set `postgresql://...` for PG |
 | `TELEGRAM_BOT_TOKEN` | Recommended | Without it, dashboard is your only visibility |
 | `TELEGRAM_CHAT_ID` | With Telegram | Your Telegram chat ID |
-| `DO_API_TOKEN` | — | DigitalOcean (for Quill infra monitor) |
+| `DO_API_TOKEN` | — | DigitalOcean (for infra monitoring agent, if added) |
 | `TAVILY_API_KEY` | — | Web search for agents |
 
 ## HTTP API & Dashboard
 
+All endpoints are served by `mc-api` on port 8000. Full interactive docs at `/docs` (Swagger UI).
+
+### Core API
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/dashboard` | Visual dashboard |
-| GET | `/dashboard/kanban` | Kanban board (task swimlanes) |
-| GET | `/agents` | List all agents |
-| GET | `/tasks` | Tasks with pagination |
-| POST | `/chat` | Chat with Jarvis |
-| POST | `/chat/{agent}` | Chat with specific agent |
+| GET | `/` | Health check / root |
+| GET | `/agents` | List all agents with status |
+| POST | `/chat` | Chat with Jarvis (default lead) |
+| POST | `/chat/{agent}` | Chat with a specific agent |
 | POST | `/task` | Create a new task |
-| GET | `/standup` | Daily standup summary |
-| GET | `/workflow` | Current workflow config |
-| GET | `/mcp/servers` | MCP server registry |
-| POST | `/heartbeat/{agent}` | Trigger agent heartbeat |
+| GET | `/standup` | Generate daily standup summary |
+| POST | `/heartbeat/{agent}` | Trigger an agent heartbeat manually |
+
+### Workflow & Missions
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/workflow` | Current workflow config (full YAML as JSON) |
+| POST | `/workflow` | Hot-reload workflow config from YAML body |
+| GET | `/workflow/guards` | List available guard functions |
+| GET | `/workflow/missions` | List mission definitions + state machines |
+
+### Dashboard & Kanban
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/dashboard` | Visual dashboard (HTML) with integrated kanban board |
+| GET | `/dashboard/agents` | Agent data for dashboard |
+| GET | `/dashboard/tasks` | Tasks with pagination + filters |
+| GET | `/dashboard/activities` | Recent activity feed |
+
+### Learning Analytics
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/dashboard/learning` | Learning dashboard (HTML) |
+| GET | `/dashboard/learning/stats` | Aggregate learning stats |
+| GET | `/dashboard/learning/timeline` | Event timeline (default: 24h) |
+| GET | `/dashboard/learning/agents` | Per-agent learning metrics |
+| GET | `/dashboard/learning/events` | Raw learning events (paginated) |
+| GET | `/dashboard/learning/patterns` | Discovered patterns |
+| GET | `/dashboard/learning/missions` | Per-mission stats |
+
+### MCP Servers
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/mcp/servers` | List registered MCP servers |
+| POST | `/mcp/reload` | Hot-reload MCP server config |
 
 ## Vision Healer — Health Checks
 
@@ -183,7 +294,7 @@ git clone https://github.com/Amaresh/agno-mission-control-copilot-sdk.git
 cd agno-mission-control-copilot-sdk
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest tests/ -q    # 72+ E2E tests
+pytest tests/ -q    # 96 E2E tests (no mocks)
 ```
 
 In dev mode, `paths.py` auto-detects the project root (via `pyproject.toml`) and uses it as `MC_HOME`. Set `MC_HOME=/custom/path` to override.
@@ -191,7 +302,7 @@ In dev mode, `paths.py` auto-detects the project root (via `pyproject.toml`) and
 ### Project Structure
 
 ```
-mission-control/
+agno-mission-control/
 ├── src/mission_control/           # Main package (PyPI distributable)
 │   ├── cli.py                     # Typer CLI (mc command)
 │   ├── config.py                  # Pydantic settings
@@ -205,7 +316,7 @@ mission-control/
 │   ├── mission_control/core/      # State machine, database, factory
 │   ├── mission_control/mcp/       # MCP server + registry
 │   └── squad/                     # Agent working dirs (SOUL.md, daily/)
-├── tests/                         # 72+ E2E tests (no mocks)
+├── tests/                         # 96 E2E tests (no mocks)
 ├── infra/systemd/                 # Dev systemd service files
 ├── workflows.yaml                 # Active workflow config
 ├── mcp_servers.yaml               # Active MCP server definitions

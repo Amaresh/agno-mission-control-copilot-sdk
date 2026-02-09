@@ -1,11 +1,11 @@
 # Mission Control — Default Workflow Configuration
-# 7 agents, ~5.2 GB RAM. Edit to add/remove agents based on available memory.
+# 7 agents by default. Edit to add/remove agents based on available memory.
 #
-# Memory guide (each agent ≈ 565 MB):
-#   7 agents → ~5.2 GB   (default)
-#   5 agents → ~3.7 GB   (remove 2 specialists)
+# Memory guide (each agent ≈ 565 MB + ~500 MB platform overhead):
+#   7 agents → ~4.5 GB   (default)
+#   5 agents → ~3.3 GB   (remove 2 specialists)
 #   3 agents → ~2.2 GB   (keep Jarvis, Friday, Vision)
-#   1 agent  → ~0.8 GB   (Jarvis only)
+#   1 agent  → ~1.1 GB   (Jarvis only)
 #
 # To add an agent: copy any specialist block, change name/role/heartbeat_offset.
 # To remove: delete the agent block. No code changes needed.
