@@ -7,8 +7,8 @@ from typing import Optional
 
 import typer
 from rich.console import Console
-from rich.table import Table
 from rich.panel import Panel
+from rich.table import Table
 
 app = typer.Typer(
     name="mc",
@@ -29,6 +29,7 @@ def setup():
 def status():
     """Show agent status, service health, and memory usage."""
     import subprocess
+
     from mission_control.mission_control.core.factory import AgentFactory
 
     console.print(Panel.fit(
@@ -69,7 +70,6 @@ def status():
     console.print(svc_table)
 
     # Memory
-    import os
     try:
         import resource
         mem_mb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
@@ -95,8 +95,9 @@ def init_db():
 @app.command()
 def seed_agents():
     """Seed the database with agent records."""
+    from mission_control.mission_control.core.database import Agent as AgentModel
+    from mission_control.mission_control.core.database import AsyncSessionLocal
     from mission_control.mission_control.core.factory import AGENT_CONFIGS
-    from mission_control.mission_control.core.database import AsyncSessionLocal, Agent as AgentModel
 
     async def _seed():
         from sqlalchemy import select
@@ -304,6 +305,7 @@ def serve(
 ):
     """Start the HTTP API server for chat interactions."""
     import uvicorn
+
     from mission_control.api import app as api_app
 
     console.print(Panel.fit(

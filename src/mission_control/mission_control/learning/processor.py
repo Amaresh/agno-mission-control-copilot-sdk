@@ -5,13 +5,11 @@ Periodically processes unprocessed learning_events and aggregates them
 into learning_patterns for use by agents at prompt-enrichment time.
 """
 
-import uuid
 from collections import defaultdict
-from datetime import datetime, timezone
 from typing import Optional
 
 import structlog
-from sqlalchemy import select, update, func
+from sqlalchemy import select, update
 
 from mission_control.mission_control.core.database import (
     AsyncSessionLocal,

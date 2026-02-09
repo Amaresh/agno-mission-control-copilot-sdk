@@ -8,9 +8,9 @@ get_all_agent_configs(). Supports hot-reload via reload().
 from pathlib import Path
 from typing import Optional
 
-import yaml
 import structlog
-from statemachine import StateMachine, State
+import yaml
+from statemachine import State, StateMachine
 
 from mission_control.mission_control.core.guards import GuardRegistry
 

@@ -45,9 +45,17 @@ class VerifyMission(BaseMission):
         Returns structured VerifyResult — never a string to parse.
         """
         import time as _time
+
         from mission_control.mission_control.core.database import (
-            AsyncSessionLocal, Task, TaskStatus, Activity, ActivityType,
-            TaskAssignment, Agent as AgentModel,
+            Activity,
+            ActivityType,
+            AsyncSessionLocal,
+            Task,
+            TaskAssignment,
+            TaskStatus,
+        )
+        from mission_control.mission_control.core.database import (
+            Agent as AgentModel,
         )
         from mission_control.mission_control.core.pr_check import has_open_pr, has_open_pr_for_task
 
@@ -77,7 +85,9 @@ class VerifyMission(BaseMission):
                 ))
                 await session.commit()
                 await self.capture_transition("REVIEW", "DONE", duration_sec=_time.monotonic() - t0)
-                from mission_control.mission_control.learning.capture import capture_mission_complete
+                from mission_control.mission_control.learning.capture import (
+                    capture_mission_complete,
+                )
                 await capture_mission_complete(
                     agent_name=self.agent.name,
                     mission_type=self._mission_type,
@@ -122,7 +132,9 @@ class VerifyMission(BaseMission):
                     duration_sec=_time.monotonic() - t0,
                     guard="has_open_pr", guard_result=True,
                 )
-                from mission_control.mission_control.learning.capture import capture_mission_complete
+                from mission_control.mission_control.learning.capture import (
+                    capture_mission_complete,
+                )
                 await capture_mission_complete(
                     agent_name=self.agent.name,
                     mission_type=self._mission_type,

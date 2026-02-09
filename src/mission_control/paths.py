@@ -7,9 +7,8 @@ Supports two modes:
 """
 
 import os
-import sys
-from pathlib import Path
 from functools import lru_cache
+from pathlib import Path
 
 # Override everything with MC_HOME env var
 _MC_HOME_ENV = os.environ.get("MC_HOME")

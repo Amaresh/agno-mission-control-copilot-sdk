@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     # Default models
     default_model: str = Field(default="llama3.1:8b")
     fallback_model: str = Field(default="llama-3.3-70b-versatile")  # Groq
-    
+
     # GitHub Copilot SDK (premium models)
     use_copilot_sdk: bool = Field(default=True)  # Use Copilot SDK by default
     copilot_model: str = Field(default="gpt-4.1")  # Premium model

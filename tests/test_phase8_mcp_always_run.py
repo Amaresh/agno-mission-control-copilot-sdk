@@ -8,7 +8,6 @@ Runs against the live API at http://localhost:8000 with real HTTP calls.
 
 import os
 import subprocess
-import uuid
 
 import pytest
 import requests

@@ -6,7 +6,6 @@ Single source of truth for: branch creation, agent execution, error
 recovery, PR verification, and state transitions.
 """
 
-from datetime import datetime, timezone
 
 import httpx
 import structlog
@@ -23,11 +22,18 @@ class BuildMission(BaseMission):
     """ASSIGNED → IN_PROGRESS → REVIEW workflow."""
 
     async def execute(self) -> str:
+        import time as _time
+
         from mission_control.mission_control.core.database import (
-            AsyncSessionLocal, Task, TaskStatus, Activity, ActivityType,
+            Activity,
+            ActivityType,
+            AsyncSessionLocal,
+            Task,
+            TaskStatus,
+        )
+        from mission_control.mission_control.core.database import (
             Agent as AgentModel,
         )
-        import time as _time
 
         task_id = self.task_id
         title = self.title
@@ -65,10 +71,8 @@ class BuildMission(BaseMission):
         # --- 2. Create branch programmatically ---
         response = None
         success = True
-        branch_exists = False
-
         if owner and repo:
-            branch_exists = await self._ensure_branch(
+            await self._ensure_branch(
                 repo_name, branch_name, target_branch,
             )
 
@@ -176,7 +180,9 @@ class BuildMission(BaseMission):
                     duration_sec=_time.monotonic() - t0,
                     guard="has_open_pr", guard_result=True,
                 )
-                from mission_control.mission_control.learning.capture import capture_mission_complete
+                from mission_control.mission_control.learning.capture import (
+                    capture_mission_complete,
+                )
                 await capture_mission_complete(
                     agent_name=self.agent.name,
                     mission_type=self._mission_type,

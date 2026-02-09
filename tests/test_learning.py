@@ -10,7 +10,7 @@ Covers:
 import uuid
 
 import pytest
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 
 from mission_control.mission_control.core.database import (
     AsyncSessionLocal,
@@ -19,24 +19,22 @@ from mission_control.mission_control.core.database import (
     LearningType,
 )
 from mission_control.mission_control.learning.capture import (
-    capture_learning_event,
     capture_error_fix,
-    capture_tool_usage,
     capture_heartbeat,
+    capture_learning_event,
     capture_task_outcome,
-    get_relevant_patterns,
-    update_pattern_usage,
+    capture_tool_usage,
     resolve_agent_id,
+    update_pattern_usage,
 )
 from tests.conftest import (
-    create_test_agent,
-    create_test_task,
-    cleanup_test_agent,
-    cleanup_test_task,
     cleanup_learning_events,
     cleanup_pattern,
+    cleanup_test_agent,
+    cleanup_test_task,
+    create_test_agent,
+    create_test_task,
 )
-
 
 # ============================================================
 # resolve_agent_id

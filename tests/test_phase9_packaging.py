@@ -3,14 +3,12 @@ Phase 9 tests — packaging, paths, SQLite compat, CLI commands, setup wizard.
 """
 
 import os
-import uuid
 import tempfile
+import uuid
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-import pytest
 from typer.testing import CliRunner
-
 
 # ===========================================
 # paths.py tests
@@ -288,6 +286,7 @@ class TestPackageStructure:
     def test_default_workflows_has_seven_agents(self):
         """Default workflows.yaml ships with 7 agents."""
         import yaml
+
         from mission_control.paths import defaults_dir
         wf = defaults_dir() / "workflows.yaml.default"
         data = yaml.safe_load(wf.read_text())

@@ -19,7 +19,7 @@ jobs:
           pip install --upgrade pip
           pip install ruff
       - name: Lint with ruff
-        run: ruff check agents/ tests/
+        run: ruff check src/ tests/
 
   test:
     runs-on: ubuntu-latest
@@ -51,7 +51,7 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/mission_control_test
         run: |
           PGPASSWORD=postgres psql -h localhost -U postgres -d mission_control_test -c "CREATE EXTENSION IF NOT EXISTS vector;"
-          python -m agents.cli init-db
+          python -m mission_control.cli init-db
       - name: Run tests
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/mission_control_test

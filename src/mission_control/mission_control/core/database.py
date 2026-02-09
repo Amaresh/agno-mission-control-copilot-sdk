@@ -6,28 +6,27 @@ Supports both PostgreSQL and SQLite backends.
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Optional, List
+from typing import Optional
 
 from sqlalchemy import (
-    Column,
+    JSON,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
     String,
     Text,
-    Boolean,
-    Float,
-    Integer,
-    DateTime,
-    ForeignKey,
-    JSON,
-    Enum as SQLEnum,
     TypeDecorator,
-    create_engine,
     event,
 )
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
-from sqlalchemy.orm import DeclarativeBase, relationship, Mapped, mapped_column
+from sqlalchemy import (
+    Enum as SQLEnum,
+)
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from mission_control.config import settings
-
 
 # ===========================================
 # Portable UUID type (works on both PG and SQLite)

@@ -8,13 +8,11 @@ SSE mode (default): Connects to pre-running MCP servers via URL.
 Stdio mode (fallback): Spawns subprocess per connection.
 """
 
-import os
-from typing import Optional
 from dataclasses import dataclass
+from typing import Optional
 
 import structlog
 from agno.tools.mcp import MCPTools
-
 
 from mission_control.mission_control.mcp.repo_scoped import RepoScopedMCPTools
 

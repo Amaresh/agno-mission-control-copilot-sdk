@@ -160,12 +160,21 @@ async def create_task(request: TaskRequest):
             -H "Content-Type: application/json" \
             -d '{"title": "Fix login bug", "assignees": ["friday"], "repository": "{owner}/{repo}"}'
     """
+    from sqlalchemy import select
+
     from mission_control.mission_control.core.database import (
-        AsyncSessionLocal, Task, TaskStatus, TaskPriority,
-        TaskAssignment, Activity, ActivityType, Notification,
+        Activity,
+        ActivityType,
+        AsyncSessionLocal,
+        Notification,
+        Task,
+        TaskAssignment,
+        TaskPriority,
+        TaskStatus,
+    )
+    from mission_control.mission_control.core.database import (
         Agent as AgentModel,
     )
-    from sqlalchemy import select
 
     try:
         # Build mission_config
@@ -838,8 +847,8 @@ async def update_workflow(request: Request):
     Validates before applying. Returns errors if invalid.
     """
     import yaml as _yaml
+
     from mission_control.mission_control.core.workflow_loader import get_workflow_loader
-    from mission_control.mission_control.core.guards import GuardRegistry  # noqa: ensure guards registered
 
     content_type = request.headers.get("content-type", "")
     body = await request.body()

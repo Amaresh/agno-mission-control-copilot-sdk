@@ -5,23 +5,24 @@ Primary interface with humans via Telegram.
 Coordinates task distribution across the agent squad.
 """
 
-from typing import Optional
 from datetime import datetime, timezone
+from typing import Optional
 
 import structlog
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from mission_control.mission_control.core.base_agent import BaseAgent
 from mission_control.mission_control.core.database import (
-    AsyncSessionLocal,
-    Task,
-    TaskStatus,
-    Agent as AgentModel,
-    TaskAssignment,
-    Notification,
     Activity,
     ActivityType,
+    AsyncSessionLocal,
+    Notification,
+    Task,
+    TaskAssignment,
+    TaskStatus,
+)
+from mission_control.mission_control.core.database import (
+    Agent as AgentModel,
 )
 
 logger = structlog.get_logger()
@@ -286,7 +287,7 @@ class JarvisAgent(BaseAgent):
 
         for notif in notifications:
             # Use the agent to process the notification
-            response = await self.run(
+            await self.run(
                 f"You have a notification: {notif['content']}\n\n"
                 "Please review and take appropriate action."
             )
@@ -333,8 +334,12 @@ class JarvisAgent(BaseAgent):
     ) -> str:
         """Create a new task and assign to ONE agent (first in list)."""
         from mission_control.mission_control.core.database import (
-            Task, TaskAssignment, TaskStatus, TaskPriority,
-            Activity, ActivityType
+            Activity,
+            ActivityType,
+            Task,
+            TaskAssignment,
+            TaskPriority,
+            TaskStatus,
         )
 
         # Enforce single assignee
@@ -396,7 +401,7 @@ class JarvisAgent(BaseAgent):
 
     async def generate_daily_standup(self) -> str:
         """Generate daily standup summary."""
-        from mission_control.mission_control.core.database import Task, Activity
+        from mission_control.mission_control.core.database import Task
 
         async with AsyncSessionLocal() as session:
             # Get today's activities

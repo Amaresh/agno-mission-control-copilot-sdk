@@ -8,11 +8,10 @@ Usage: python -m mission_control.scheduler_main
 """
 
 import asyncio
-import os
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 
 import structlog
-from sqlalchemy import select, func
+from sqlalchemy import select
 
 from mission_control.config import settings
 from mission_control.mission_control.core.factory import AgentFactory, _get_agent_configs
@@ -37,7 +36,8 @@ def _suppress_minutes(interval_sec: int) -> int:
 
 async def _check_heartbeat_health():
     """Watchdog: alert human via Telegram if heartbeats go stale."""
-    from mission_control.mission_control.core.database import AsyncSessionLocal, Agent as AgentModel
+    from mission_control.mission_control.core.database import Agent as AgentModel
+    from mission_control.mission_control.core.database import AsyncSessionLocal
 
     try:
         async with AsyncSessionLocal() as session:
@@ -84,8 +84,8 @@ async def _check_heartbeat_health():
             if chat_id and bot_token:
                 import httpx
                 message = (
-                    f"⚠️ *Heartbeat Watchdog Alert*\n\n"
-                    f"The following agents have stale heartbeats:\n"
+                    "⚠️ *Heartbeat Watchdog Alert*\n\n"
+                    "The following agents have stale heartbeats:\n"
                     + "\n".join(f"• {n} (>{t}min)" for n, t in unsuppressed)
                     + f"\n\nTime: {datetime.now(timezone.utc).strftime('%H:%M UTC')}"
                 )
@@ -156,8 +156,9 @@ async def _run():
     if chat_id and bot_token:
         async def _scheduled_standup():
             try:
-                from mission_control.mission_control.core.factory import AgentFactory
                 import httpx
+
+                from mission_control.mission_control.core.factory import AgentFactory
                 jarvis = AgentFactory.get_agent("jarvis")
                 summary = await jarvis.generate_daily_standup()
                 async with httpx.AsyncClient() as client:

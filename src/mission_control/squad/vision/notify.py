@@ -6,7 +6,7 @@ Sends alerts via Telegram message + GitHub Issue for audit trail.
 
 import asyncio
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Optional
 
 import httpx
 import structlog

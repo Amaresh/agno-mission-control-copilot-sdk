@@ -9,7 +9,6 @@ import structlog
 
 from mission_control.mission_control.core.base_agent import BaseAgent
 from mission_control.mission_control.core.workflow_loader import get_workflow_loader
-from mission_control.mission_control.mcp.manager import MCPManager
 
 logger = structlog.get_logger()
 
@@ -46,13 +45,16 @@ class GenericAgent(BaseAgent):
     async def _check_for_work(self) -> Optional[dict]:
         """Check for pending work during heartbeat."""
         from sqlalchemy import select
+
+        from mission_control.mission_control.core.database import (
+            Agent as AgentModel,
+        )
         from mission_control.mission_control.core.database import (
             AsyncSessionLocal,
-            Task,
-            TaskStatus,
-            TaskAssignment,
-            Agent as AgentModel,
             Notification,
+            Task,
+            TaskAssignment,
+            TaskStatus,
         )
 
         async with AsyncSessionLocal() as session:
@@ -155,6 +157,7 @@ class GenericAgent(BaseAgent):
     async def _do_work(self, work: dict) -> str:
         """Handle pending work."""
         from sqlalchemy import select
+
         from mission_control.mission_control.core.database import (
             AsyncSessionLocal,
             Notification,
@@ -227,10 +230,13 @@ class AgentFactory:
             return
 
         from sqlalchemy import select
+
         from mission_control.mission_control.core.database import (
-            AsyncSessionLocal,
             Agent as AgentModel,
+        )
+        from mission_control.mission_control.core.database import (
             AgentLevel,
+            AsyncSessionLocal,
         )
 
         try:

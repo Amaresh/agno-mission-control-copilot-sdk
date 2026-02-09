@@ -9,14 +9,13 @@ Reports issues via Telegram + GitHub Issue.
 """
 
 import asyncio
-import subprocess
 from datetime import datetime, timezone
 from typing import Optional
 
 import structlog
 from sqlalchemy import select
 
-from mission_control.squad.vision.checks import run_all_checks, HealthCheckResult
+from mission_control.squad.vision.checks import HealthCheckResult, run_all_checks
 from mission_control.squad.vision.notify import notify_human
 
 logger = structlog.get_logger()
@@ -37,10 +36,12 @@ class VisionHealer:
     async def _record_heartbeat(self):
         """Persist last_heartbeat timestamp so the watchdog doesn't flag Vision as stale."""
         from mission_control.mission_control.core.database import (
-            AsyncSessionLocal,
-            Agent as AgentModel,
             Activity,
             ActivityType,
+            AsyncSessionLocal,
+        )
+        from mission_control.mission_control.core.database import (
+            Agent as AgentModel,
         )
 
         try:
@@ -100,7 +101,7 @@ class VisionHealer:
 
         # Notify human if any fixes were applied or critical issues found
         critical = [r for r in failures if r.severity == "critical"]
-        
+
         if fixes or critical:
             await self._report_to_human(results, failures, fixes, duration)
 
@@ -116,7 +117,7 @@ class VisionHealer:
     ):
         """Send alert to human about issues found/fixed."""
         lines = []
-        
+
         for r in failures:
             prefix = "🔧" if r.fix_applied else "❌"
             line = f"{prefix} **{r.name}**: {r.message}"

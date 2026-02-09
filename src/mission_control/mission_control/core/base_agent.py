@@ -8,21 +8,22 @@ Uses Agno framework patterns:
 - Learning for memory across sessions
 """
 
-import os
 import asyncio
+import os
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, Any, Dict
+from typing import Any, Dict, Optional
 
 import structlog
 from agno.agent import Agent as AgnoAgent
-from agno.models.ollama import Ollama
-from agno.models.groq import Groq
 from agno.db.postgres import PostgresDb
+from agno.models.groq import Groq
+from agno.models.ollama import Ollama
 
 from mission_control.config import settings
-from .copilot_model import CopilotModel, get_copilot_model
+
+from .copilot_model import CopilotModel
 
 logger = structlog.get_logger()
 
@@ -159,7 +160,7 @@ A helpful and efficient AI agent.
         # Note: MCP tools require async initialization
         mcp_manager = MCPManager()
         self._mcp_tools = []
-        
+
         if self.mcp_servers:
             try:
                 mcp_tools_list = await mcp_manager.get_tools_for_agent(self.mcp_servers)
@@ -173,7 +174,7 @@ A helpful and efficient AI agent.
                         self.logger.warning("Failed to connect MCP tool", error=str(e))
             except Exception as e:
                 self.logger.warning("MCP tools failed to load, continuing without", error=str(e))
-        
+
         # Combine MCP tools with Mission Control tools (task creation, delegation, etc.)
         all_tools = list(MISSION_CONTROL_TOOLS) + self._mcp_tools
 
@@ -182,23 +183,23 @@ A helpful and efficient AI agent.
 
         # Model priority: Copilot SDK (GPT-4.1) > Ollama > Groq
         model = None
-        
+
         # Try Copilot SDK first (premium model via GitHub)
         if settings.use_copilot_sdk:
             try:
                 model = CopilotModel(id=settings.copilot_model)
-                
+
                 # Configure MCP servers for Copilot SDK native tool support
                 mcp_servers = self._build_copilot_mcp_config()
                 if mcp_servers:
                     model.set_mcp_servers(mcp_servers)
                     self.logger.info("Configured MCP servers for Copilot", num_servers=len(mcp_servers))
-                
+
                 self.logger.info("Using Copilot SDK model", model=settings.copilot_model)
             except Exception as e:
                 self.logger.warning("Copilot SDK unavailable", error=str(e))
                 model = None
-        
+
         # Fallback to Ollama
         if model is None:
             try:
@@ -251,7 +252,7 @@ A helpful and efficient AI agent.
             self.set_repo_scope(self._repo_scope)
 
         return agent
-    
+
     def _build_copilot_mcp_config(self) -> Dict[str, Any]:
         """Build MCP server config for Copilot SDK sessions.
         
@@ -262,7 +263,7 @@ A helpful and efficient AI agent.
         registry = get_mcp_registry()
 
         mcp_servers = {}
-        
+
         # Mission Control MCP — always injected (built-in)
         mcp_port = int(os.environ.get("MCP_PORT", "8001"))
         mc_tools = ["list_tasks", "list_agents", "get_my_tasks", "list_documents"]
@@ -273,7 +274,7 @@ A helpful and efficient AI agent.
             "url": f"http://127.0.0.1:{mcp_port}/sse",
             "tools": mc_tools,
         }
-        
+
         # Add each server from the agent's mcp_servers list via registry
         for server_name in self.mcp_servers:
             config = registry.get_server_config(server_name)
@@ -299,9 +300,9 @@ A helpful and efficient AI agent.
                 entry["tools"] = tools
 
             mcp_servers[server_name] = entry
-        
+
         return mcp_servers
-    
+
     @staticmethod
     def _ensure_mcp_wrapper(
         name: str, command: str, args: list[str], env: dict[str, str],
@@ -403,8 +404,8 @@ You are running as a headless agent WITHOUT local filesystem access.
             self._agent.model.set_repo_scope(repo)
 
     async def run(
-        self, 
-        message: str, 
+        self,
+        message: str,
         user_id: Optional[str] = None,
         session_id: Optional[str] = None,
     ) -> str:
@@ -422,7 +423,7 @@ You are running as a headless agent WITHOUT local filesystem access.
         agent = await self.get_agent()
 
         self.logger.info(
-            "Running agent", 
+            "Running agent",
             message_preview=message[:100],
             user_id=user_id,
             session_id=session_id,
@@ -437,7 +438,7 @@ You are running as a headless agent WITHOUT local filesystem access.
             # This ensures Copilot sessions are cached per-user for context continuity
             if hasattr(agent.model, 'set_user_context') and user_id:
                 agent.model.set_user_context(user_id)
-            
+
             # Pass user_id and session_id to Agno for session tracking
             response = await agent.arun(
                 enriched_message,
@@ -467,8 +468,8 @@ You are running as a headless agent WITHOUT local filesystem access.
         """
         try:
             from mission_control.mission_control.learning.capture import (
-                get_relevant_patterns,
                 format_patterns_for_context,
+                get_relevant_patterns,
             )
             patterns = await get_relevant_patterns(query=message, limit=3)
             if patterns:
@@ -511,6 +512,7 @@ You are running as a headless agent WITHOUT local filesystem access.
         Returns status: HEARTBEAT_OK or description of work done.
         """
         import time
+
         from mission_control.mission_control.learning.capture import capture_heartbeat
 
         self.logger.info("Heartbeat started")
@@ -589,13 +591,16 @@ You are running as a headless agent WITHOUT local filesystem access.
 
     async def _record_heartbeat(self):
         """Persist last_heartbeat timestamp to the agents table."""
+        from sqlalchemy import select
+
         from mission_control.mission_control.core.database import (
-            AsyncSessionLocal,
-            Agent as AgentModel,
             Activity,
             ActivityType,
+            AsyncSessionLocal,
         )
-        from sqlalchemy import select
+        from mission_control.mission_control.core.database import (
+            Agent as AgentModel,
+        )
 
         try:
             async with AsyncSessionLocal() as session:
@@ -621,7 +626,9 @@ You are running as a headless agent WITHOUT local filesystem access.
     ) -> tuple[bool, str]:
         """Create PR via GitHub API when LLM tool call fails (propagation delay)."""
         import asyncio
+
         import httpx
+
         from mission_control.config import settings as _s
         token = _s.github_token
         if not token or "/" not in repo_name:

@@ -8,9 +8,9 @@ no LLM calls. They query the DB, shell, and GitHub API directly.
 import asyncio
 import os
 import subprocess
-from dataclasses import dataclass, field
-from datetime import datetime, timezone, timedelta
-from typing import Optional, List
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from typing import List, Optional
 
 import httpx
 import structlog
@@ -18,13 +18,15 @@ from sqlalchemy import select, text
 
 from mission_control.config import settings
 from mission_control.mission_control.core.database import (
-    AsyncSessionLocal,
-    Task,
-    TaskStatus,
-    TaskAssignment,
-    Agent as AgentModel,
     Activity,
     ActivityType,
+    AsyncSessionLocal,
+    Task,
+    TaskAssignment,
+    TaskStatus,
+)
+from mission_control.mission_control.core.database import (
+    Agent as AgentModel,
 )
 
 logger = structlog.get_logger()
@@ -242,7 +244,7 @@ async def check_stale_tasks() -> List[HealthCheckResult]:
             results.append(HealthCheckResult(
                 "stale_tasks", False,
                 f"Task '{task.title[:50]}' stale ({age_h:.1f}h in {old_status.value})",
-                fix_applied=f"Reset to INBOX",
+                fix_applied="Reset to INBOX",
                 severity="warning",
             ))
 
@@ -634,7 +636,7 @@ async def check_log_bloat() -> List[HealthCheckResult]:
                 results.append(HealthCheckResult(
                     "log_bloat", False,
                     f"{fname}: {size // (1024*1024)}MB",
-                    fix_applied=f"Truncated to last 500 lines",
+                    fix_applied="Truncated to last 500 lines",
                     severity="warning",
                 ))
             except Exception as e:
@@ -739,7 +741,7 @@ async def check_review_without_prs() -> List[HealthCheckResult]:
                 session.add(Activity(
                     type=ActivityType.TASK_STATUS_CHANGED,
                     task_id=task.id,
-                    message=f"Vision Healer: REVIEW task has no PR, reset to ASSIGNED",
+                    message="Vision Healer: REVIEW task has no PR, reset to ASSIGNED",
                 ))
                 results.append(HealthCheckResult(
                     "review_prs", False,
@@ -813,6 +815,7 @@ async def check_long_running_tasks() -> List[HealthCheckResult]:
 
 # Patterns for files agents are ALLOWED to modify (working state, not code)
 import re
+
 _ALLOWED_PATTERNS = [
     re.compile(r"agents/squad/\w+/daily/"),       # daily work logs
     re.compile(r"agents/squad/\w+/WORKING\.md"),   # agent working state

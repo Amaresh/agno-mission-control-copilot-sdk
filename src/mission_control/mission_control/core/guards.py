@@ -6,7 +6,7 @@ before a state transition is allowed. Each guard receives a context dict
 with task info and an async DB session, returns True to allow the transition.
 """
 
-from typing import Callable, Awaitable
+from typing import Awaitable, Callable
 
 import structlog
 
@@ -76,6 +76,7 @@ async def _no_open_pr(context: dict, session=None) -> bool:
 async def _has_branch(context: dict, session=None) -> bool:
     """True if the task's branch exists in the target repo."""
     import httpx
+
     from mission_control.config import settings
     repo = context.get("repository", "")
     branch = context.get("branch_name", "")
@@ -124,6 +125,7 @@ async def _is_stale(context: dict, session=None) -> bool:
 async def _files_changed_ok(context: dict, session=None) -> bool:
     """True if the PR diff is below the max files threshold."""
     import httpx
+
     from mission_control.config import settings
     repo = context.get("repository", "")
     head_prefix = context.get("head_prefix", "")

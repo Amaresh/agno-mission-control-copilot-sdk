@@ -8,13 +8,11 @@ import os
 import shutil
 import subprocess
 import sys
-from pathlib import Path
 from typing import Optional
 
 from rich.console import Console
 from rich.panel import Panel
-from rich.prompt import Prompt, Confirm
-from rich.table import Table
+from rich.prompt import Confirm, Prompt
 
 from mission_control import paths
 
@@ -263,7 +261,7 @@ def step_init_db(database_url: str) -> None:
 
     async def _init():
         # Re-import to pick up new DATABASE_URL
-        from mission_control.mission_control.core.database import init_db, async_engine
+        from mission_control.mission_control.core.database import init_db
         await init_db()
         _ok("Schema created")
 

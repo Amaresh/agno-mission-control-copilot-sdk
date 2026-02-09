@@ -75,7 +75,9 @@ class BaseMission(ABC):
             # Fire-and-forget: record the block for guard monitor
             import asyncio
             try:
-                from mission_control.mission_control.learning.guard_monitor import record_guard_block
+                from mission_control.mission_control.learning.guard_monitor import (
+                    record_guard_block,
+                )
                 loop = asyncio.get_event_loop()
                 if loop.is_running():
                     asyncio.ensure_future(record_guard_block(
@@ -101,8 +103,8 @@ class BaseMission(ABC):
         """Retrieve relevant patterns for this mission and format for LLM injection."""
         try:
             from mission_control.mission_control.learning.capture import (
-                get_relevant_patterns,
                 format_patterns_for_context,
+                get_relevant_patterns,
             )
             patterns = await get_relevant_patterns(
                 query=f"{self.title} {self.description or ''}",

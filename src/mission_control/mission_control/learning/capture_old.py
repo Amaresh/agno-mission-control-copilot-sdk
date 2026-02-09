@@ -4,11 +4,10 @@ Learning capture module for federated learning.
 
 import uuid
 from datetime import datetime, timezone
-from typing import Optional, Any
+from typing import Any, Optional
 
 import structlog
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from mission_control.mission_control.core.database import (
     AsyncSessionLocal,

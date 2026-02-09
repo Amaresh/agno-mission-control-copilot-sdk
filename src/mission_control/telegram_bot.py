@@ -23,7 +23,7 @@ from typing import Optional
 import structlog
 from telegram import Update
 from telegram.error import TimedOut
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
 from mission_control.config import settings
 
@@ -52,7 +52,7 @@ async def get_jarvis():
 # ---------------------------------------------------------------------------
 # Singleton Vision (for Telegram escalation)
 # ---------------------------------------------------------------------------
-_vision_instance: Optional["VisionHealer"] = None
+_vision_instance: Optional["VisionHealer"] = None  # noqa: F821
 _vision_lock = asyncio.Lock()
 
 
@@ -127,7 +127,7 @@ async def standup_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /standup command."""
     logger.info("Standup command received", user=update.effective_user.first_name)
     await update.message.reply_text("⏳ Generating standup...")
-    
+
     try:
         from mission_control.mission_control.core.factory import AgentFactory
         jarvis = AgentFactory.get_agent("jarvis")
@@ -255,7 +255,11 @@ async def _send_progress_updates(bot, chat_id: int, queue: asyncio.Queue):
 
 async def _log_activity(activity_type, message: str, extra_data: dict = None):
     """Log a chatbot activity to the DB."""
-    from mission_control.mission_control.core.database import AsyncSessionLocal, Activity, ActivityType
+    from mission_control.mission_control.core.database import (
+        Activity,
+        ActivityType,
+        AsyncSessionLocal,
+    )
     try:
         async with AsyncSessionLocal() as session:
             act = Activity(
@@ -488,7 +492,7 @@ def create_telegram_app() -> Application:
     """Create and configure the Telegram bot application."""
     if not settings.telegram_bot_token:
         raise ValueError("TELEGRAM_BOT_TOKEN not configured")
-    
+
     app = (
         Application.builder()
         .token(settings.telegram_bot_token)
@@ -497,7 +501,7 @@ def create_telegram_app() -> Application:
         .connect_timeout(15)
         .build()
     )
-    
+
     # Add handlers
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("status", status_command))
@@ -506,7 +510,7 @@ def create_telegram_app() -> Application:
     app.add_handler(CommandHandler("vision", vision_command))
     app.add_handler(CommandHandler("jarvis", jarvis_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    
+
     return app
 
 
@@ -514,14 +518,14 @@ async def run_telegram_bot():
     """Run the Telegram bot with polling."""
     logger.info("Starting Telegram bot...")
     app = create_telegram_app()
-    
+
     # Initialize and start polling
     await app.initialize()
     await app.start()
     await app.updater.start_polling(drop_pending_updates=True)
-    
+
     logger.info("Telegram bot is running!")
-    
+
     # Keep running until interrupted
     try:
         while True:
@@ -550,7 +554,7 @@ async def _start_mcp_servers() -> dict:
     # Go up one level if we're inside agents/
     if os.path.basename(project_root) == "agents":
         project_root = os.path.dirname(project_root)
-    
+
     venv_python = os.path.join(project_root, ".venv", "bin", "python")
     if not os.path.exists(venv_python):
         venv_python = sys.executable
@@ -561,7 +565,7 @@ async def _start_mcp_servers() -> dict:
             return s.connect_ex(("127.0.0.1", port)) == 0
 
     processes = {}
-    
+
     # 1. Mission Control MCP (Python FastMCP SSE on port 8001)
     mcp_port = int(os.environ.get("MCP_PORT", "8001"))
 
@@ -591,7 +595,7 @@ async def _start_mcp_servers() -> dict:
     )
     processes["mission-control"] = proc
     logger.info("Started Mission Control MCP server", port=mcp_port, pid=proc.pid)
-    
+
     # Wait for SSE endpoint to be ready
     for attempt in range(15):
         await asyncio.sleep(1)
@@ -600,11 +604,11 @@ async def _start_mcp_servers() -> dict:
             break
     else:
         logger.warning("Mission Control MCP may not be ready yet — continuing anyway")
-    
+
     # Note: GitHub MCP runs as type:"local" in Copilot config (per-session stdio subprocess).
     # Supergateway SSE bridge was removed — it only supports one concurrent client, which
     # breaks when multiple Copilot sessions connect simultaneously.
-    
+
     return processes
 
 
@@ -619,36 +623,36 @@ async def run_telegram_bot_with_scheduler(with_scheduler: bool = False):
     # Sync agent configs to DB (ensures roles/levels match code)
     from mission_control.mission_control.core.factory import AgentFactory
     await AgentFactory.sync_agent_configs()
-    
+
     # MCP server is now a separate systemd service (mc-mcp.service).
     # Only start it inline if it's not already running.
     mcp_processes = await _start_mcp_servers()
-    
+
     # Pre-initialize Jarvis before starting bot (Agno pattern)
     await get_jarvis()
-    
+
     app = create_telegram_app()
-    
+
     # Legacy scheduler support (for non-systemd environments)
     scheduler = None
     if with_scheduler:
         from mission_control.mission_control.core.factory import AgentFactory
         from mission_control.mission_control.scheduler.heartbeat import get_scheduler
-        
+
         scheduler = get_scheduler()
         for agent in AgentFactory.get_all_agents():
             scheduler.register_agent(agent.name, agent.heartbeat)
-            logger.info(f"Registered agent for heartbeat", agent=agent.name)
+            logger.info("Registered agent for heartbeat", agent=agent.name)
         scheduler.start()
         logger.info("Heartbeat scheduler started (legacy inline mode)")
-    
+
     # Initialize and start polling
     await app.initialize()
     await app.start()
     await app.updater.start_polling(drop_pending_updates=True)
-    
+
     logger.info("Telegram bot is running!")
-    
+
     # Keep running until interrupted
     try:
         while True:
