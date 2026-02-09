@@ -158,7 +158,7 @@ async def create_task(request: TaskRequest):
     Example:
         curl -X POST http://localhost:8000/task \
             -H "Content-Type: application/json" \
-            -d '{"title": "Fix login bug", "assignees": ["friday"], "repository": "Amaresh/apiblender"}'
+            -d '{"title": "Fix login bug", "assignees": ["friday"], "repository": "{owner}/{repo}"}'
     """
     from mission_control.mission_control.core.database import (
         AsyncSessionLocal, Task, TaskStatus, TaskPriority,

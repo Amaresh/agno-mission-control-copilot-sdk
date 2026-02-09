@@ -34,7 +34,7 @@ class BaseMission(ABC):
     @property
     def repository(self) -> str:
         """Target repo from config, with fallback."""
-        return self.config.get("repository", "Amaresh/mission-control-review")
+        return self.config.get("repository", "{owner}/{target-repo}")
 
     @property
     def source_branch(self) -> str:

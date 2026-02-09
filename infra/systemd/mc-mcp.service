@@ -1,19 +1,14 @@
 [Unit]
-Description=Mission Control MCP Server (SSE on :8001)
-After=network.target
+Description=Mission Control MCP Server
+After=network.target mc-api.service
 
 [Service]
 Type=simple
-WorkingDirectory=/home/amaresh/projects/mission-control
-ExecStart=/home/amaresh/projects/mission-control/.venv/bin/python -m mission_control.mcp.mission_control_server
-Environment=PYTHONPATH=/home/amaresh/projects/mission-control
-Environment=MCP_PORT=8001
-Environment=MCP_TRANSPORT=sse
-EnvironmentFile=/home/amaresh/projects/mission-control/.env
+WorkingDirectory={MC_HOME}
+EnvironmentFile={MC_HOME}/.env
+ExecStart={PYTHON} -m mission_control.mcp.mission_control_server
 Restart=always
 RestartSec=5
-StandardOutput=append:/home/amaresh/projects/mission-control/logs/mcp-mission-control.log
-StandardError=append:/home/amaresh/projects/mission-control/logs/mcp-mission-control.log
 
 [Install]
 WantedBy=default.target

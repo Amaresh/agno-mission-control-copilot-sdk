@@ -2,7 +2,7 @@
 TEMPORARY: Copilot code review cycle for Vision Healer.
 
 Every heartbeat:
-1. List all open PRs in Amaresh/mission-control-review
+1. List all open PRs in {owner}/{target-repo}
 2. Request Copilot review on each
 3. Wait 5 min for reviews to generate
 4. Fetch new review comments, deduplicate against existing tasks
@@ -48,7 +48,7 @@ logger = structlog.get_logger()
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
-REVIEW_REPO = "Amaresh/mission-control-review"
+REVIEW_REPO = "{owner}/{target-repo}"
 REVIEW_WAIT_SECONDS = 300          # 5 minutes
 MERGE_THRESHOLD = 2                # <= this many new tasks → start merging
 WORKER_AGENTS = ["Friday", "Shuri", "Wong", "Loki", "Wanda", "Pepper"]

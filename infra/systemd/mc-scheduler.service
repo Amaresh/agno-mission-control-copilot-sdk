@@ -1,18 +1,14 @@
 [Unit]
-Description=Mission Control Heartbeat Scheduler + Watchdog
-After=network.target mc-mcp.service
-Wants=mc-mcp.service
+Description=Mission Control Scheduler
+After=network.target mc-api.service
 
 [Service]
 Type=simple
-WorkingDirectory=/home/amaresh/projects/mission-control
-ExecStart=/home/amaresh/projects/mission-control/.venv/bin/python -m mission_control.scheduler_main
-Environment=PYTHONPATH=/home/amaresh/projects/mission-control
-EnvironmentFile=/home/amaresh/projects/mission-control/.env
+WorkingDirectory={MC_HOME}
+EnvironmentFile={MC_HOME}/.env
+ExecStart={PYTHON} -m mission_control.scheduler_main
 Restart=always
 RestartSec=5
-StandardOutput=append:/home/amaresh/projects/mission-control/logs/scheduler.log
-StandardError=append:/home/amaresh/projects/mission-control/logs/scheduler.log
 
 [Install]
 WantedBy=default.target

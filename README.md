@@ -175,8 +175,8 @@ All config lives in `~/.mission-control/` (or project root in dev mode):
 ## Development
 
 ```bash
-git clone https://github.com/Amaresh/mission-control.git
-cd mission-control
+git clone https://github.com/Amaresh/agno-mission-control-copilot-sdk.git
+cd agno-mission-control-copilot-sdk
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 pytest tests/ -q    # 72+ E2E tests

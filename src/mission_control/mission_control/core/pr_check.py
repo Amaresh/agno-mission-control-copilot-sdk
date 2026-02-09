@@ -36,7 +36,7 @@ async def has_open_pr(repo: str, head_prefix: str) -> Tuple[bool, Optional[str]]
         logger.warning("No github_token configured — skipping PR check")
         return True, None  # fail-open when no token
 
-    owner_repo = repo  # e.g. "Amaresh/timingchain-ai-platform"
+    owner_repo = repo  # e.g. "{owner}/{repo}"
     url = f"https://api.github.com/repos/{owner_repo}/pulls"
     headers = {
         "Authorization": f"token {token}",

@@ -26,7 +26,7 @@ _WRITE_TOOLS = {
 class RepoScopedMCPTools(MCPTools):
     """MCPTools wrapper that enforces a target repository constraint.
 
-    Set ``allowed_repo`` (e.g. ``"Amaresh/timingchain-ai-platform"``) before
+    Set ``allowed_repo`` (e.g. ``"{owner}/{repo}"``) before
     each work cycle.  Any GitHub write tool whose ``owner``/``repo`` params
     don't match will return an error string instead of executing.
 

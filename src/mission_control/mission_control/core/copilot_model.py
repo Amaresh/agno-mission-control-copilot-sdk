@@ -3,7 +3,7 @@
 This module provides a proper Agno Model implementation that uses
 GitHub Copilot SDK for premium model access (GPT-4.1, etc).
 
-KEY FEATURES (learned from timingchain-copilot-sdk):
+KEY FEATURES (learned from copilot-sdk):
 1. Per-user session caching - maintains conversation context
 2. SDK session resume - preserves full history on SDK side
 3. History injection - falls back to injecting messages into prompt
@@ -126,7 +126,7 @@ class CopilotModel(Model):
     """
     Agno Model implementation using GitHub Copilot SDK.
     
-    Session Management Strategy (from timingchain-copilot-sdk):
+    Session Management Strategy (from copilot-sdk):
     1. Cache SDK sessions by user_id for reuse
     2. Try resume_session() to restore SDK-side history
     3. On resume failure, inject message history into system prompt

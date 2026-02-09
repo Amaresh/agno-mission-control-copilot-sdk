@@ -1,18 +1,14 @@
 [Unit]
 Description=Mission Control Telegram Bot
-After=network.target mc-mcp.service
-Requires=mc-mcp.service
+After=network.target mc-api.service
 
 [Service]
 Type=simple
-WorkingDirectory=/home/amaresh/projects/mission-control
-ExecStart=/home/amaresh/projects/mission-control/.venv/bin/python -m mission_control.telegram_bot
-Environment=PYTHONPATH=/home/amaresh/projects/mission-control
-EnvironmentFile=/home/amaresh/projects/mission-control/.env
+WorkingDirectory={MC_HOME}
+EnvironmentFile={MC_HOME}/.env
+ExecStart={PYTHON} -m mission_control.telegram_bot
 Restart=always
-RestartSec=10
-StandardOutput=append:/home/amaresh/projects/mission-control/logs/telegram-bot.log
-StandardError=append:/home/amaresh/projects/mission-control/logs/telegram-bot.log
+RestartSec=5
 
 [Install]
 WantedBy=default.target

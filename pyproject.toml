@@ -19,9 +19,9 @@ classifiers = [
 keywords = ["ai", "agents", "copilot", "mcp", "multi-agent", "automation"]
 
 [project.urls]
-Homepage = "https://github.com/Amaresh/mission-control"
-Repository = "https://github.com/Amaresh/mission-control"
-Issues = "https://github.com/Amaresh/mission-control/issues"
+Homepage = "https://github.com/Amaresh/agno-mission-control-copilot-sdk"
+Repository = "https://github.com/Amaresh/agno-mission-control-copilot-sdk"
+Issues = "https://github.com/Amaresh/agno-mission-control-copilot-sdk/issues"
 
 dependencies = [
     # Agent Framework

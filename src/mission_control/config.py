@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     # Database
     # ===========================================
     database_url: str = Field(
-        default="postgresql://postgres:postgres@localhost:5432/mission_control"
+        default="sqlite:///mission_control.db"
     )
     redis_url: str = Field(default="redis://localhost:6379")
 

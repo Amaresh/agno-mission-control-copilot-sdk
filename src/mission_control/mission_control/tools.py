@@ -48,7 +48,7 @@ async def create_task(
         description: Detailed description of the task
         assignees: Comma-separated agent names to assign (e.g., "friday,shuri")
         priority: Task priority - low, medium, high, or critical
-        repository: Target GitHub repo (e.g., "Amaresh/apiblender"). Stored in mission_config.
+        repository: Target GitHub repo (e.g., "{owner}/{repo}"). Stored in mission_config.
         source_branch: Base branch to branch from (default: repo default). Stored in mission_config.
 
     Returns:

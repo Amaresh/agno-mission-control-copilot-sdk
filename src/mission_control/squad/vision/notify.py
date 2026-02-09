@@ -67,7 +67,7 @@ async def create_github_issue(title: str, body: str) -> Optional[str]:
         logger.warning("No GitHub token for Vision issue creation")
         return None
 
-    repo = "Amaresh/mission-control"
+    repo = "{owner}/mission-control"
     try:
         async with httpx.AsyncClient() as client:
             resp = await client.post(

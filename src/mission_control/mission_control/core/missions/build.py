@@ -16,7 +16,7 @@ from mission_control.mission_control.core.missions.base import BaseMission
 
 logger = structlog.get_logger()
 
-DEFAULT_REPO = "Amaresh/mission-control-review"
+DEFAULT_REPO = "{owner}/{target-repo}"
 
 
 class BuildMission(BaseMission):

@@ -105,7 +105,7 @@ async def create_task(
         description: Detailed description of the task
         assignees: Comma-separated agent names to assign (e.g., "friday,shuri")
         priority: Task priority - low, medium, high, or critical
-        repository: Target GitHub repository (e.g., "Amaresh/timingchain-ai-platform"). 
+        repository: Target GitHub repository (e.g., "{owner}/{repo}"). 
                     REQUIRED. You MUST specify which repo the work targets.
                     Ask the human if you don't know which repository to use.
     
@@ -133,7 +133,7 @@ async def create_task(
     if not repository:
         return (
             "ERROR: `repository` parameter is REQUIRED. "
-            "You must specify the target GitHub repository (e.g., 'Amaresh/timingchain-ai-platform'). "
+            "You must specify the target GitHub repository (e.g., '{owner}/{repo}'). "
             "If you don't know which repo this work targets, ASK THE HUMAN before creating the task."
         )
     
