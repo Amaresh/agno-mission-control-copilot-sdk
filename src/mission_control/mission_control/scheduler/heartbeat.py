@@ -41,6 +41,7 @@ class HeartbeatScheduler:
     def __init__(self):
         self.scheduler = AsyncIOScheduler()
         self._agent_callbacks: dict[str, Callable[[], Awaitable[str]]] = {}
+        self._hourly_agents: set[str] = set()
         self.logger = logger.bind(component="scheduler")
 
     def register_agent(
@@ -93,6 +94,7 @@ class HeartbeatScheduler:
         """Register an agent that runs once per hour instead of every 15 minutes."""
         agent_key = agent_name.lower()
         self._agent_callbacks[agent_key] = heartbeat_callback
+        self._hourly_agents.add(agent_key)
 
         self.scheduler.add_job(
             self._run_heartbeat,
@@ -109,7 +111,9 @@ class HeartbeatScheduler:
             schedule=f":{minute_offset} every hour",
         )
 
-    HEARTBEAT_TIMEOUT = 300  # 5 minutes max per heartbeat
+    HEARTBEAT_TIMEOUT = 300  # 5 minutes default
+    # Hourly agents (like Vision) get a longer timeout since they do heavier work
+    HOURLY_HEARTBEAT_TIMEOUT = 900  # 15 minutes
 
     async def _run_heartbeat(self, agent_key: str):
         """Execute heartbeat for an agent with enforced timeout."""
@@ -118,13 +122,16 @@ class HeartbeatScheduler:
             self.logger.error(f"No callback registered for agent '{agent_key}'")
             return
 
+        is_hourly = agent_key in self._hourly_agents
+        timeout = self.HOURLY_HEARTBEAT_TIMEOUT if is_hourly else self.HEARTBEAT_TIMEOUT
+
         self.logger.info("Running heartbeat", agent=agent_key)
         start_time = datetime.now(timezone.utc)
 
         try:
             result = await asyncio.wait_for(
                 callback(),
-                timeout=self.HEARTBEAT_TIMEOUT,
+                timeout=timeout,
             )
             duration = (datetime.now(timezone.utc) - start_time).total_seconds()
 
@@ -139,7 +146,7 @@ class HeartbeatScheduler:
             self.logger.warning(
                 "Heartbeat timed out",
                 agent=agent_key,
-                timeout=self.HEARTBEAT_TIMEOUT,
+                timeout=timeout,
                 duration_seconds=duration,
             )
         except Exception as e:

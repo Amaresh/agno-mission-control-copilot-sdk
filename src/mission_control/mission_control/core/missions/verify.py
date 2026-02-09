@@ -103,6 +103,7 @@ class VerifyMission(BaseMission):
 
             # Check for matching open PR — task_id first, then agent prefix fallback
             short_id = str(task_id)[:8]
+            agent_name = None
             pr_found, pr_url = await has_open_pr_for_task(repo_name, short_id)
             if not pr_found:
                 # Fallback: check by assigned agent's branch prefix
@@ -116,6 +117,15 @@ class VerifyMission(BaseMission):
                 if agent_name:
                     pr_found, pr_url = await has_open_pr(
                         repo_name, f"{agent_name.lower()}/",
+                    )
+
+            # Final fallback: check the default review repo if different
+            default_repo = "Amaresh/mission-control-review"
+            if not pr_found and repo_name != default_repo:
+                pr_found, pr_url = await has_open_pr_for_task(default_repo, short_id)
+                if not pr_found and agent_name:
+                    pr_found, pr_url = await has_open_pr(
+                        default_repo, f"{agent_name.lower()}/",
                     )
 
             if pr_found:
