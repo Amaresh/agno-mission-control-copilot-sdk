@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![PyPI](https://img.shields.io/badge/TestPyPI-v0.1.1-orange)](https://test.pypi.org/project/agno-mission-control/)
+[![PyPI](https://img.shields.io/badge/TestPyPI-v0.1.2-orange)](https://test.pypi.org/project/agno-mission-control/0.1.2/)
 
 > **A self-orchestrating AI agent platform that runs autonomous missions — not just code, but any workflow you can define.** Ship a build mission that branches, codes, and opens PRs. Define a deploy mission that stages, validates, and promotes to production. Create a monitoring mission that watches your infrastructure and self-heals. Or invent your own — missions are YAML state machines with guard-gated transitions, and agents are config entries, not code. The entire system runs on modest hardware (even a $12 cloud server) because all LLM inference is delegated to GitHub Copilot SDK — no local GPU, no expensive API bills. The Agno framework silently learns from every interaction, so your squad gets measurably better at your workflows over days and weeks without manual tuning.
 
