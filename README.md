@@ -215,6 +215,87 @@ curl -X POST http://localhost:8000/workflow -d @workflows.yaml
 mc stop && mc start
 ```
 
+## MCP Tool Servers
+
+Agents get their capabilities from [MCP servers](https://modelcontextprotocol.io/) — pluggable tool providers defined in `mcp_servers.yaml`. Every agent also gets the built-in `mission-control` MCP server automatically (task/agent/document operations).
+
+### Shipped Servers
+
+| Server | Package | What It Does |
+|--------|---------|-------------|
+| `github` | `@modelcontextprotocol/server-github` | Repos, issues, PRs, branches, code search |
+| `digitalocean` | `@digitalocean/mcp` | Apps, databases, droplets, deployments |
+| `telegram` | `@zhigang1992/telegram-mcp` | Send/receive Telegram messages |
+| `tavily` | `tavily-mcp` | Web search and research |
+| `twilio` | `twilio-mcp` | SMS and WhatsApp messaging |
+
+### Adding Your Own
+
+Add an entry to `mcp_servers.yaml`, set env vars, and reference by name in the agent's config:
+
+```yaml
+# mcp_servers.yaml
+servers:
+  notion:
+    command: "npx"
+    args: ["-y", "@notionhq/mcp-server"]
+    env_keys: [NOTION_API_KEY]
+    env_map:
+      NOTION_API_KEY: NOTION_API_KEY
+    description: "Notion workspace management"
+```
+
+```yaml
+# workflows.yaml — give the agent access
+agents:
+  docs_agent:
+    name: DocsAgent
+    role: Documentation Manager
+    mission: build
+    mcp_servers:
+      - github
+      - notion    # ← now this agent can read/write Notion
+```
+
+Any MCP-compliant server works. Verify registered servers: `GET /mcp/servers`. Hot-reload: `POST /mcp/reload`.
+
+## Model Selection
+
+Default: **GitHub Copilot SDK (GPT-4.1)** — no local GPU, no API bills (included with Copilot subscription). All agents share one Copilot client with per-agent sessions.
+
+### Model Fallback Chain
+
+```
+1. GitHub Copilot SDK (GPT-4.1)    ← primary, recommended
+2. Groq (llama-3.3-70b-versatile)  ← cloud fallback (if GROQ_API_KEY set)
+3. Ollama (llama3.1:8b)            ← local fallback (if Ollama running)
+```
+
+Automatic failover — if the Copilot SDK is unreachable, agents fall back to Groq, then Ollama.
+
+### Override via Environment
+
+```bash
+# .env
+COPILOT_MODEL=gpt-4.1          # Primary model (any Copilot-supported model)
+VISION_MODEL=gpt-4.1            # Vision agent can use a different model
+DEFAULT_MODEL=llama3.1:8b       # Ollama model name
+FALLBACK_MODEL=llama-3.3-70b-versatile  # Groq model name
+OLLAMA_HOST=http://localhost:11434
+GROQ_API_KEY=your_key_here
+```
+
+### Why Copilot SDK by Default?
+
+| | Copilot SDK | Local Ollama | Groq |
+|--|-------------|-------------|------|
+| **Hardware** | ~1 GB RAM (platform only) | 8–48 GB+ VRAM | ~1 GB RAM |
+| **Model quality** | GPT-4.1 (premium) | llama3.1:8b (decent) | llama-3.3-70b (good) |
+| **Cost** | Copilot subscription | Free (needs GPU) | Free tier available |
+| **Setup** | `gh copilot` + PAT | Install Ollama + pull | API key |
+
+See [docs/MODEL_PROVIDERS.md](docs/MODEL_PROVIDERS.md) for detailed configuration.
+
 ## Configuration
 
 All config lives in `~/.mission-control/` (or project root in dev mode):
