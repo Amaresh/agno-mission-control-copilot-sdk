@@ -1,6 +1,12 @@
 # Mission Control
 
-> Autonomous multi-agent AI orchestration system powered by GitHub Copilot SDK
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![PyPI](https://img.shields.io/badge/TestPyPI-v0.1.1-orange)](https://test.pypi.org/project/agno-mission-control/)
+
+> **A squad of AI agents that writes code, opens PRs, reviews work, and ships software — while you're away from your desk.** Send a task via Telegram from your phone, and your agents pick it up, break it down, implement it, and report back. The entire system runs on modest hardware (even a $12 cloud server) because all LLM inference is delegated to GitHub Copilot SDK — no local GPU, no expensive API bills. The Agno framework silently learns from every interaction: each heartbeat, each error fix, each completed task feeds back into agent prompts, so your squad gets measurably better at your codebase over days and weeks without any manual tuning.
+
+> **Inspiration:** This project was inspired by [Bhanu Teja P's (@pbteja1998)](https://x.com/pbteja1998) original [Mission Control thread](https://x.com/pbteja1998/status/2017662163540971756) — a squad of autonomous AI agents led by Jarvis that create work, claim tasks, communicate, review each other, and collaborate as a real team. That vision is the foundation this project builds on, adapted for GitHub Copilot SDK and the Agno framework.
 
 ## Quick Start
 
@@ -13,12 +19,12 @@ That's it. The wizard detects your system, authenticates GitHub, sets up the dat
 
 ## What It Does
 
-Mission Control runs a squad of AI agents that autonomously collaborate on software tasks. Agents pick up tasks, write code, open PRs, review each other's work, and report status — all coordinated through a shared database and MCP tools.
-
 - **7 agents** by default — config-driven, zero custom code per agent
-- **GitHub Copilot SDK** (GPT-4.1) as primary LLM
+- **GitHub Copilot SDK** (GPT-4.1) as primary LLM — runs on modest hardware, no local GPU needed
 - **MCP tool integration** — GitHub, Telegram, DigitalOcean, custom tools
-- **Deterministic health monitoring** — Vision Healer runs automated checks hourly
+- **Deterministic health monitoring** — Vision Healer runs 10 automated checks hourly
+- **Built-in Kanban dashboard** — real-time task board with agent status and activity feed
+- **Learning analytics** — event timelines, per-agent performance, pattern discovery
 - **PR enforcement** — every task must produce a PR; transitions are fact-gated
 - **SQLite or PostgreSQL** — zero-config SQLite default, PostgreSQL for production
 
@@ -322,6 +328,10 @@ agno-mission-control/
 ├── mcp_servers.yaml               # Active MCP server definitions
 └── pyproject.toml
 ```
+
+## Acknowledgements
+
+Inspired by [Bhanu Teja P's (@pbteja1998)](https://x.com/pbteja1998) original [Mission Control concept](https://x.com/pbteja1998/status/2017662163540971756). Built with [GitHub Copilot SDK](https://github.com/github/copilot-sdk), [Agno](https://github.com/agno-agi/agno), and [FastAPI](https://fastapi.tiangolo.com/).
 
 ## License
 
