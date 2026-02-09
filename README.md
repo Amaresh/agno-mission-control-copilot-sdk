@@ -72,7 +72,7 @@ All agents are config-driven via `workflows.yaml`. Only Jarvis (lead orchestrati
 | Agent | Role | Interval | Description |
 |-------|------|----------|-------------|
 | **Jarvis** | Squad Lead | 15 min | Decomposes work, delegates, reviews PRs, gatekeeps REVIEW→DONE |
-| **Vision** | System Healer | 1 hour | Deterministic health monitor — 10 automated checks, auto-fixes |
+| **Vision** | System Healer | 1 hour | 16 automated health checks, auto-fixes, Telegram crisis mode escalation |
 
 ### Specialists
 
@@ -417,9 +417,88 @@ All endpoints are served by `mc-api` on port 8000. Full interactive docs at `/do
 | GET | `/mcp/servers` | List registered MCP servers |
 | POST | `/mcp/reload` | Hot-reload MCP server config |
 
+## Telegram Bot
+
+The Telegram bot (`mc telegram`) is your primary remote interface to the entire system. It supports two operating modes with automatic escalation.
+
+### Dual-Mode Chat
+
+| Mode | Model | Behaviour |
+|------|-------|-----------|
+| **Jarvis** (default) | GPT-4.1 via Copilot SDK | Natural conversation — ask questions, create tasks, check status. Jarvis routes through the standard agent pipeline. |
+| **Vision** (crisis) | Claude Opus 4.6 via Copilot CLI | Direct shell execution with `--allow-all`. Full system access — restart services, kill processes, run diagnostics, deploy fixes. |
+
+Switch modes manually:
+
+```
+/jarvis    → Normal Jarvis mode (default)
+/vision    → Escalate to Vision ops mode
+```
+
+### Auto-Escalation
+
+If Jarvis fails to respond (timeout, error, or tool failure), the bot **automatically escalates to Vision mode** and retries:
+
+```
+You: "check the stuck PR on mission-control"
+Jarvis: ❌ (tool timeout)
+Bot: ⚠️ Auto-escalating to Vision mode...
+Vision: ✅ "PR #42 has merge conflicts. Resolved and force-pushed."
+```
+
+After 2 consecutive successful Vision responses, the bot suggests handing back to Jarvis.
+
+### Bot Commands
+
+| Command | Description |
+|---------|-------------|
+| `/start` | Welcome message and command list |
+| `/status` | System status — agents online, services running, last heartbeat |
+| `/agents` | List the full agent squad with current status |
+| `/standup` | Generate a daily standup summary from recent activity |
+| `/vision` | Switch to Vision ops/crisis mode |
+| `/jarvis` | Switch back to normal Jarvis mode |
+
+Any message that isn't a command is treated as a chat message and routed to the active mode's agent.
+
+### Progress Tracking
+
+During long operations (code reviews, deployments, multi-file edits), the bot sends **live progress updates** to your chat:
+
+- 🔍 Reviewing PR #42...
+- 📖 Reading `src/core/factory.py`...
+- ✏️ Writing `src/core/missions/generic.py`...
+- 🌿 Creating branch `feat/content-pipeline`...
+- 📊 Created 3 tasks
+
+Updates start after 10s and repeat every 20s until the operation completes.
+
+### Setup
+
+1. Create a bot via [@BotFather](https://t.me/BotFather) on Telegram
+2. Copy the bot token
+3. Send any message to your bot, then get your chat ID from `https://api.telegram.org/bot<TOKEN>/getUpdates`
+4. Set environment variables:
+
+```bash
+TELEGRAM_BOT_TOKEN=your-bot-token
+TELEGRAM_CHAT_ID=your-chat-id
+```
+
+5. Start the bot:
+
+```bash
+mc telegram          # Foreground (for testing)
+mc start             # Or as part of all services (systemd)
+```
+
+> **Without Telegram:** The system works fine — use the dashboard at `http://localhost:8000` and the CLI (`mc run jarvis "..."`) instead. Telegram is recommended for mobile/remote visibility.
+
 ## Vision Healer — Health Checks
 
-16 deterministic checks run hourly (no LLM involved in detection):
+Vision is the system's autonomous operations manager. Every hour it runs **16 deterministic checks** (no LLM involved in detection), auto-fixes what it can, and alerts you via Telegram for anything requiring human judgement.
+
+When alerted via Telegram, you can respond in Vision mode to immediately act on the issue — making it a closed-loop system management tool from your phone.
 
 | # | Check | Auto-Fix |
 |---|-------|----------|
@@ -439,6 +518,8 @@ All endpoints are served by `mc-api` on port 8000. Full interactive docs at `/do
 | 14 | Top memory consumers (per-category audit) | Flag bloat |
 | 15 | Orphaned python processes | Flag for cleanup |
 | 16 | Pipeline health (tasks stuck >12h in any stage) | Alert human |
+
+> **Closed-loop ops:** Vision detects → Telegram alerts → you respond in `/vision` mode → Vision fixes. All from your phone.
 
 ## Development
 
