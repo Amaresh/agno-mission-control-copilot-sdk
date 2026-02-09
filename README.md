@@ -97,7 +97,7 @@ All agents are config-driven via `workflows.yaml`. Only Jarvis (lead orchestrati
 | **Ezra** | Publisher | 3 hr | Publish to GitHub, format for web |
 | **Herald** | Social Amplifier | 12 hr | Social media promotion |
 | **Lurker** | Reddit Scout | 8 hr | Reddit outreach opportunities |
-| **Morgan** | Marketing Lead | 8 hr | Content strategy via Telegram |
+| **Morgan** | Content PM | 8 hr | Content strategy & coordination via Telegram |
 | **Archie** | Analytics Reporter | 7 days | Performance analytics |
 
 ### Scaling Agents
@@ -555,11 +555,11 @@ When alerted via Telegram, you can respond in Vision mode to immediately act on 
 ## Development
 
 ```bash
-git clone https://github.com/your-org/agno-mission-control-copilot-sdk.git
+git clone https://github.com/Amaresh/agno-mission-control-copilot-sdk.git
 cd agno-mission-control-copilot-sdk
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest tests/ -q    # 126+ E2E tests (no mocks)
+pytest tests/ -q    # 164 E2E tests (no mocks)
 ```
 
 In dev mode, `paths.py` auto-detects the project root (via `pyproject.toml`) and uses it as `MC_HOME`. Set `MC_HOME=/custom/path` to override.
@@ -581,7 +581,7 @@ agno-mission-control/
 │   ├── mission_control/core/      # State machine, database, factory
 │   ├── mission_control/mcp/       # MCP server + registry
 │   └── squad/                     # Agent working dirs (SOUL.md, daily/)
-├── tests/                         # 126+ E2E tests (no mocks)
+├── tests/                         # 164 E2E tests (no mocks)
 ├── infra/systemd/                 # Dev systemd service files
 ├── workflows.yaml                 # Active workflow config
 ├── mcp_servers.yaml               # Active MCP server definitions

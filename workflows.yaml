@@ -89,13 +89,111 @@ agents:
     mission: build
     name: Wong
     role: Documentation
+  scout:
+    heartbeat_interval: 21600
+    heartbeat_offset: 5
+    level: specialist
+    mcp_servers:
+    - tavily
+    - github
+    mission: content
+    name: Scout
+    role: Trend Researcher
+  ink:
+    heartbeat_offset: 20
+    level: specialist
+    mcp_servers:
+    - tavily
+    - github
+    mission: content
+    name: Ink
+    role: SEO Writer
+  sage:
+    heartbeat_interval: 28800
+    heartbeat_offset: 22
+    level: specialist
+    mcp_servers:
+    - github
+    mission: content
+    name: Sage
+    role: Quality Editor
+  ezra:
+    heartbeat_interval: 10800
+    heartbeat_offset: 24
+    level: specialist
+    mcp_servers:
+    - github
+    mission: content
+    name: Ezra
+    role: Publisher
+  herald:
+    heartbeat_interval: 43200
+    heartbeat_offset: 26
+    level: specialist
+    mcp_servers:
+    - tavily
+    - github
+    mission: content
+    name: Herald
+    role: Social Amplifier
+  lurker:
+    always_run:
+      prompt: >
+        You are Lurker, the Reddit Scout. Search Reddit and forums for
+        outreach opportunities using Tavily. Note subreddit, thread title,
+        relevance, and suggested engagement approach. Commit findings to
+        the content repository via GitHub MCP.
+      timeout: 120
+    heartbeat_interval: 28800
+    heartbeat_offset: 28
+    level: specialist
+    mcp_servers:
+    - tavily
+    - github
+    mission: content
+    name: Lurker
+    role: Reddit Scout
+  morgan:
+    heartbeat_interval: 28800
+    heartbeat_offset: 32
+    level: lead
+    mcp_servers:
+    - github
+    - telegram
+    mission: content
+    name: Morgan
+    role: Content Project Manager
+  archie:
+    always_run:
+      prompt: >
+        You are Archie, the Analytics Reporter. Generate a weekly analytics
+        report. Use GitHub to check repo activity and count content pieces
+        per pipeline stage. Use Tavily to check competitor content and
+        trending topics. Write a concise report with throughput, top topics,
+        recommendations, and gap analysis. Commit to the content repository.
+      timeout: 180
+    heartbeat_interval: 604800
+    heartbeat_offset: 30
+    level: specialist
+    mcp_servers:
+    - tavily
+    - github
+    mission: content
+    name: Archie
+    role: Analytics Reporter
 available_guards:
 - files_changed_ok
 - has_branch
+- has_draft
 - has_error
 - has_open_pr
+- has_research
+- has_social_posts
+- is_published
 - is_stale
+- needs_revision
 - no_open_pr
+- quality_approved
 missions:
   build:
     default_config:
@@ -201,14 +299,22 @@ missions:
           message: 'promote: social posts for {title}'
     transitions:
     - from: RESEARCH
+      guard: has_research
       to: DRAFT
     - from: DRAFT
+      guard: has_draft
       to: REVIEW
     - from: REVIEW
+      guard: quality_approved
       to: PUBLISH
+    - from: REVIEW
+      guard: needs_revision
+      to: DRAFT
     - from: PUBLISH
+      guard: is_published
       to: PROMOTE
     - from: PROMOTE
+      guard: has_social_posts
       to: DONE
   verify:
     description: "Review workflow: check PR exists \u2192 approve or reject"
