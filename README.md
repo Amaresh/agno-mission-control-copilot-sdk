@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![PyPI](https://img.shields.io/badge/TestPyPI-v0.4.0-orange)](https://test.pypi.org/project/agno-mission-control/0.4.0/)
+[![PyPI](https://img.shields.io/badge/TestPyPI-v0.4.1-orange)](https://test.pypi.org/project/agno-mission-control/0.4.1/)
 
 > **A self-orchestrating AI agent platform that runs autonomous missions — not just code, but any workflow you can define as a YAML state machine.** Ships with two ready-to-go missions: a **build** pipeline (branch → code → PR) and a **content** pipeline (research → draft → review → publish → promote). Need something else? Define a deploy mission, a QA mission, an infra monitoring mission — any multi-stage workflow where agents pick up work, execute steps, and hand off to the next stage. Agents are YAML config entries, not code. Transitions are guarded by deterministic checks, not LLM output. Vision runs 16 automated health checks every hour, alerts you via Telegram, and you can fix issues from your phone in real-time. The entire system runs on modest hardware (even a $12 cloud server) because all LLM inference is delegated to GitHub Copilot SDK — no local GPU, no expensive API bills. Only a `GITHUB_TOKEN` is required; everything else (Telegram, Tavily, DigitalOcean) is bring-your-own-keys. The Agno framework silently learns from every interaction, so your squad gets measurably better at your workflows over days and weeks without manual tuning.
 
@@ -178,7 +178,7 @@ REVIEW → DONE        (if PR exists)
 REVIEW → ASSIGNED    (if no PR — send back)
 ```
 
-**Mission core is pure workflow management.** Transitions are gated by deterministic guards (PR exists? branch created? file committed?), never by LLM response parsing. The `content` mission demonstrates the full GenericMission engine — pre-actions gather context, prompts are rendered from templates, and post-actions persist deliverables to GitHub.
+**Mission core is pure workflow management.** Transitions are gated by deterministic guards (PR exists? branch created? file committed?), never by LLM response parsing. Guards are **enforced at runtime** — before any state transition, the engine evaluates the guard function and blocks the transition if it fails. Failed guards keep the task in its current state; the next heartbeat retries. This guarantees no task reaches DONE without its deliverables actually existing. The `content` mission demonstrates the full GenericMission engine — pre-actions gather context, prompts are rendered from templates, post-actions persist deliverables to GitHub, and guards verify the deliverables exist before allowing the transition.
 
 ## Mission Builder
 

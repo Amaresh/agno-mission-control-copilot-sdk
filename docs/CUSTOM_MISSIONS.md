@@ -101,6 +101,29 @@ missions:
 | `stages.<STATE>.post_actions` | list | Actions to run after the LLM (commit deliverables) |
 | `transitions` | list | State machine edges with optional `guard` conditions |
 
+### Guard Enforcement
+
+Guards are **evaluated at runtime** before each state transition. The execution flow is:
+
+1. Agent runs the LLM with the stage prompt
+2. `post_check` validates the LLM output (e.g. `[APPROVED]` in response)
+3. `post_actions` persist deliverables (e.g. `github_commit`)
+4. **Guard is evaluated** — if it fails, the transition is blocked and the task stays in its current state
+5. On the next heartbeat, the agent retries from step 1
+
+This guarantees that no task can advance to the next state without its deliverables actually existing. For example, `has_research` checks the GitHub API for a file in `content/research/` matching the task's short ID.
+
+Register custom guards in `guards.py`:
+
+```python
+from mission_control.mission_control.core.guards import GuardRegistry
+
+@GuardRegistry.register("my_custom_guard")
+async def _my_guard(context: dict, session=None) -> bool:
+    # context has: task_id, short_id, title, repository, owner, repo, etc.
+    return some_check(context)
+```
+
 ---
 
 ## Built-in Actions
