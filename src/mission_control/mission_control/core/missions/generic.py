@@ -39,6 +39,12 @@ class GenericMission(BaseMission):
                  mission_type: str = "build"):
         super().__init__(agent, task_id, title, description, mission_config)
         self._type = mission_type
+        # Merge default_config from workflows.yaml (task config overrides defaults)
+        mdef = self._get_mission_def()
+        defaults = mdef.get("default_config", {})
+        if defaults:
+            merged = {**defaults, **self.config}
+            self.config = merged
 
     @property
     def _mission_type(self) -> str:
@@ -70,6 +76,33 @@ class GenericMission(BaseMission):
             if t["from"] == current and t.get("guard") != "has_error":
                 return t["to"]
         return None
+
+    async def _evaluate_transition_guard(
+        self, current_state: str, next_state: str, task_vars: dict,
+    ) -> tuple[bool, str | None]:
+        """Evaluate the guard on the transition from current→next.
+
+        Returns (passed, guard_name). If no guard is defined, returns (True, None).
+        """
+        from mission_control.mission_control.core.guards import GuardRegistry
+
+        mdef = self._get_mission_def()
+        for t in mdef.get("transitions", []):
+            if t["from"] == current_state and t["to"] == next_state:
+                guard_name = t.get("guard")
+                if not guard_name or guard_name == "has_error":
+                    return True, None
+                guard_fn = GuardRegistry.get(guard_name)
+                if not guard_fn:
+                    self.logger.warning("Guard not found", guard=guard_name)
+                    return True, guard_name
+                try:
+                    result = await guard_fn(task_vars)
+                    return result, guard_name
+                except Exception as e:
+                    self.logger.error("Guard failed", guard=guard_name, error=str(e))
+                    return False, guard_name
+        return True, None
 
     def _get_initial_state(self) -> str:
         return self._get_mission_def().get("initial_state", "ASSIGNED")
@@ -223,6 +256,18 @@ class GenericMission(BaseMission):
                 task_vars["llm_output"] = response.replace("[APPROVED]", "").strip()
             for action_cfg in stage_cfg.get("post_actions", []):
                 await runner.run(action_cfg, extra_vars={"llm_output": task_vars["llm_output"]})
+
+        # --- Evaluate transition guard ---
+        if deliverable_ok and next_state:
+            guard_passed, guard_name = await self._evaluate_transition_guard(
+                current_state, next_state, task_vars,
+            )
+            if not guard_passed:
+                self.logger.warning(
+                    "Guard blocked transition",
+                    guard=guard_name, from_state=current_state, to_state=next_state,
+                )
+                deliverable_ok = False
 
         # --- Transition or reset ---
         async with AsyncSessionLocal() as session:
