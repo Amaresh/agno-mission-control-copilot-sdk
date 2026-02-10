@@ -251,6 +251,7 @@ class GenericMission(BaseMission):
                 # Reassign to next agent if state_agents defines one
                 await self._reassign_to_next_agent(
                     session, task, next_state, AgentModel, TaskAssignment,
+                    from_state=old_status.name,
                 )
 
                 await session.commit()
@@ -322,6 +323,7 @@ class GenericMission(BaseMission):
     async def _reassign_to_next_agent(
         self, session, task, next_state: str,
         AgentModel, TaskAssignment,  # noqa: N803
+        from_state: str | None = None,
     ):
         """Hand off task to the agent responsible for next_state."""
         state_agents = self._get_state_agents()
@@ -329,8 +331,8 @@ class GenericMission(BaseMission):
         if not next_role or next_state == "DONE":
             return
 
-        # Check if next agent is same as current (build pattern — sticky)
-        current_role = state_agents.get(task.status.name if hasattr(task.status, 'name') else str(task.status))
+        # Skip if same role handles both states (build pattern — sticky)
+        current_role = state_agents.get(from_state) if from_state else None
         if next_role == current_role:
             return
 

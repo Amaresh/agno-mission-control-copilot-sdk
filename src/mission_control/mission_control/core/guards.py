@@ -147,3 +147,90 @@ async def _files_changed_ok(context: dict, session=None) -> bool:
     except Exception:
         pass
     return True
+
+
+# ── Content Pipeline Guards ──────────────────────────────────────
+
+@GuardRegistry.register("has_research")
+async def _has_research(context: dict, session=None) -> bool:
+    """True if a research file exists for this task in content/research/."""
+    return await _check_content_file(context, "content/research")
+
+
+@GuardRegistry.register("has_draft")
+async def _has_draft(context: dict, session=None) -> bool:
+    """True if a draft article exists for this task in content/drafts/."""
+    return await _check_content_file(context, "content/drafts")
+
+
+@GuardRegistry.register("quality_approved")
+async def _quality_approved(context: dict, session=None) -> bool:
+    """True if the latest commit on the draft contains [approved]."""
+    import httpx
+
+    from mission_control.config import settings
+    repo = context.get("repository", "")
+    token = settings.github_token
+    if not repo or not token:
+        return False
+    headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github+json"}
+    short_id = context.get("short_id", str(context.get("task_id", ""))[:8])
+    path = f"content/drafts/{short_id}-article.md"
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                f"https://api.github.com/repos/{repo}/commits",
+                params={"path": path, "per_page": 1},
+                headers=headers,
+            )
+            if resp.status_code == 200:
+                commits = resp.json()
+                if commits:
+                    return "[approved]" in commits[0].get("commit", {}).get("message", "").lower()
+    except Exception:
+        pass
+    return False
+
+
+@GuardRegistry.register("needs_revision")
+async def _needs_revision(context: dict, session=None) -> bool:
+    """True if quality NOT approved (inverse)."""
+    return not await _quality_approved(context, session)
+
+
+@GuardRegistry.register("is_published")
+async def _is_published(context: dict, session=None) -> bool:
+    """True if content exists in content/published/ for this task."""
+    return await _check_content_file(context, "content/published")
+
+
+@GuardRegistry.register("has_social_posts")
+async def _has_social_posts(context: dict, session=None) -> bool:
+    """True if social media content exists for this task."""
+    return await _check_content_file(context, "content/social")
+
+
+async def _check_content_file(context: dict, folder: str) -> bool:
+    """Helper: check if a file matching the task short_id exists in a folder."""
+    import httpx
+
+    from mission_control.config import settings
+    repo = context.get("repository", "")
+    token = settings.github_token
+    if not repo or not token:
+        return False
+    short_id = context.get("short_id", str(context.get("task_id", ""))[:8])
+    headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github+json"}
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                f"https://api.github.com/repos/{repo}/contents/{folder}",
+                headers=headers,
+            )
+            if resp.status_code == 200:
+                files = resp.json()
+                if isinstance(files, list):
+                    return any(short_id in f.get("name", "") for f in files)
+    except Exception:
+        pass
+    return False

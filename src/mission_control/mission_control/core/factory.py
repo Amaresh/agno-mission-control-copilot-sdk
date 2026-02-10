@@ -85,7 +85,7 @@ class GenericAgent(BaseAgent):
             # Also check custom pipeline states from config
             pipeline_states = [TaskStatus.IN_PROGRESS]
             custom_states = get_workflow_loader().get_all_mission_states()
-            builtin = {"ASSIGNED", "IN_PROGRESS", "REVIEW", "DONE"}
+            builtin = {"ASSIGNED", "IN_PROGRESS", "DONE"}
             for s in custom_states:
                 if s not in builtin and hasattr(TaskStatus, s):
                     pipeline_states.append(TaskStatus(s))

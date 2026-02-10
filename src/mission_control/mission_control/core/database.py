@@ -84,6 +84,11 @@ class TaskStatus(str, Enum):
     REVIEW = "review"
     DONE = "done"
     BLOCKED = "blocked"
+    # Content pipeline states
+    RESEARCH = "research"
+    DRAFT = "draft"
+    PUBLISH = "publish"
+    PROMOTE = "promote"
 
 
 class TaskPriority(str, Enum):

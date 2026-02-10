@@ -13,8 +13,12 @@ import yaml
 from statemachine import State, StateMachine
 
 from mission_control.mission_control.core.guards import GuardRegistry
+from mission_control.mission_control.core.actions import _ACTION_HANDLERS
 
 logger = structlog.get_logger()
+
+# Known post_check values recognized by GenericMission.execute()
+_VALID_POST_CHECKS = {"pr_exists", "review_approved"}
 
 # Default path — use centralized path resolver
 from mission_control.paths import workflows_yaml as _workflows_yaml_path
@@ -108,6 +112,19 @@ class WorkflowLoader:
         with open(self._yaml_path) as f:
             data = yaml.safe_load(f)
 
+        # Validate before loading — block hard errors, log warnings
+        issues = self.validate_yaml(data)
+        hard_errors = [e for e in issues if not e.startswith("[warning]")]
+        soft_warnings = [e.removeprefix("[warning] ") for e in issues if e.startswith("[warning]")]
+        for w in soft_warnings:
+            logger.warning("Workflow validation", issue=w)
+        if hard_errors:
+            for e in hard_errors:
+                logger.error("Workflow validation error", error=e)
+            raise ValueError(
+                f"workflows.yaml has {len(hard_errors)} error(s): {hard_errors[0]}"
+            )
+
         self._missions = data.get("missions", {})
         self._agents = data.get("agents", {})
 
@@ -190,12 +207,16 @@ class WorkflowLoader:
         from mission_control.mission_control.core.missions.generic import GenericMission
         return GenericMission
 
-    def get_all_mission_states(self) -> list[str]:
-        """Collect custom states from all missions in config."""
+    def get_all_mission_states(self) -> set[str]:
+        """Collect all states declared across all missions (explicit + from transitions)."""
         self.ensure_loaded()
-        states = []
+        states: set[str] = set()
         for mdef in self._missions.values():
-            states.extend(mdef.get("states", []))
+            for s in mdef.get("states", []):
+                states.add(s)
+            for t in mdef.get("transitions", []):
+                states.add(t["from"])
+                states.add(t["to"])
         return states
 
     def get_mission_config(self, mission_type: str) -> dict:
@@ -278,23 +299,34 @@ class WorkflowLoader:
         ]
 
     def validate_yaml(self, data: dict) -> list[str]:
-        """Validate a workflow YAML dict. Returns list of errors (empty = valid)."""
-        errors = []
+        """Validate a workflow YAML dict. Returns list of errors (empty = valid).
+
+        Deep validation based on learnings from heartbeat integration tests:
+        - All transition states must exist in TaskStatus enum
+        - initial_state must have outgoing transitions
+        - Every non-terminal mission must have a path to DONE
+        - state_agents roles must reference agent roles defined in the same YAML
+        - state_agents must cover all reachable states (except DONE)
+        - post_check values must be recognized by GenericMission
+        - pre/post action types must be registered
+        - Agent heartbeat offsets should not collide within same mission
+        - Pipeline staggering advice for multi-agent missions
+        """
+        errors: list[str] = []
+        warnings: list[str] = []
+
         if "missions" not in data:
             errors.append("Missing 'missions' section")
         if "agents" not in data:
             errors.append("Missing 'agents' section")
+        if errors:
+            return errors  # can't validate further
 
-        for mname, mdef in data.get("missions", {}).items():
-            if not mdef.get("transitions"):
-                errors.append(f"Mission '{mname}' has no transitions")
-            for i, t in enumerate(mdef.get("transitions", [])):
-                if "from" not in t or "to" not in t:
-                    errors.append(f"Mission '{mname}' transition {i} missing from/to")
-                if t.get("guard") and not GuardRegistry.get(t["guard"]):
-                    errors.append(f"Mission '{mname}' transition {i}: unknown guard '{t['guard']}'")
-
+        # Build lookup: role → [agent keys]
+        role_to_agents: dict[str, list[str]] = {}
+        mission_to_agents: dict[str, list[dict]] = {}
         valid_missions = set(data.get("missions", {}).keys())
+
         for akey, adef in data.get("agents", {}).items():
             mission = adef.get("mission")
             if mission and mission not in valid_missions:
@@ -303,6 +335,157 @@ class WorkflowLoader:
                 errors.append(f"Agent '{akey}' missing 'name'")
             if "role" not in adef:
                 errors.append(f"Agent '{akey}' missing 'role'")
+            role = adef.get("role", "")
+            role_to_agents.setdefault(role, []).append(akey)
+            if mission:
+                mission_to_agents.setdefault(mission, []).append(adef)
+
+        # Import TaskStatus to validate states
+        try:
+            from mission_control.mission_control.core.database import TaskStatus
+            valid_statuses = {s.name for s in TaskStatus}
+        except ImportError:
+            valid_statuses = None
+
+        for mname, mdef in data.get("missions", {}).items():
+            prefix = f"Mission '{mname}'"
+
+            # --- Transitions ---
+            transitions = mdef.get("transitions", [])
+            if not transitions:
+                errors.append(f"{prefix} has no transitions")
+                continue
+
+            all_states: set[str] = set()
+            from_states: set[str] = set()
+            to_states: set[str] = set()
+
+            for i, t in enumerate(transitions):
+                if "from" not in t or "to" not in t:
+                    errors.append(f"{prefix} transition {i} missing from/to")
+                    continue
+                frm, to = t["from"], t["to"]
+                all_states.update([frm, to])
+                from_states.add(frm)
+                to_states.add(to)
+
+                # Guard exists?
+                guard = t.get("guard")
+                if guard and not GuardRegistry.get(guard):
+                    errors.append(
+                        f"{prefix} transition {i} ({frm}→{to}): "
+                        f"unknown guard '{guard}'"
+                    )
+
+            # --- States in TaskStatus enum ---
+            if valid_statuses:
+                for s in all_states:
+                    if s not in valid_statuses:
+                        errors.append(
+                            f"{prefix}: state '{s}' not in TaskStatus enum. "
+                            f"Valid: {sorted(valid_statuses)}"
+                        )
+
+            # --- initial_state ---
+            initial = mdef.get("initial_state", "ASSIGNED")
+            if initial not in from_states and initial != "DONE":
+                errors.append(
+                    f"{prefix}: initial_state '{initial}' has no outgoing transitions. "
+                    f"States with outgoing transitions: {sorted(from_states)}"
+                )
+
+            # --- Reachability: path to DONE ---
+            verify_strategy = mdef.get("verify_strategy", "none")
+            terminal_states = all_states - from_states
+            if "DONE" not in terminal_states and "DONE" not in all_states:
+                if verify_strategy == "pr" and "REVIEW" in terminal_states:
+                    pass  # Build-style: REVIEW terminal, verify handles DONE
+                else:
+                    errors.append(
+                        f"{prefix}: no path to DONE. Terminal states: "
+                        f"{sorted(terminal_states)}. Add a transition to DONE "
+                        f"from one of these states, or set verify_strategy: pr "
+                        f"to delegate completion to the verify mission."
+                    )
+
+            # --- state_agents validation ---
+            state_agents = mdef.get("state_agents", {})
+            if state_agents:
+                non_done_states = all_states - {"DONE"}
+                uncovered = non_done_states - set(state_agents.keys())
+                if uncovered:
+                    errors.append(
+                        f"{prefix}: state_agents missing coverage for states: "
+                        f"{sorted(uncovered)}. Tasks reaching these states "
+                        f"won't be reassigned to any agent."
+                    )
+
+                for state, role in state_agents.items():
+                    if state not in all_states and state != "DONE":
+                        warnings.append(
+                            f"{prefix}: state_agents references state '{state}' "
+                            f"which is not reachable via transitions"
+                        )
+                    agents_with_role = role_to_agents.get(role, [])
+                    if not agents_with_role:
+                        errors.append(
+                            f"{prefix}: state_agents[{state}] = '{role}' but no agent "
+                            f"has this role. Available roles: "
+                            f"{sorted(set(r for r in role_to_agents if r))}"
+                        )
+                    elif len(agents_with_role) > 1:
+                        warnings.append(
+                            f"{prefix}: state_agents[{state}] = '{role}' matches "
+                            f"multiple agents: {agents_with_role}. First match will "
+                            f"be used for reassignment."
+                        )
+
+            # --- Stages validation ---
+            stages = mdef.get("stages", {})
+            for stage_name, stage_cfg in stages.items():
+                if stage_name not in all_states:
+                    warnings.append(
+                        f"{prefix}: stage config for '{stage_name}' but this state "
+                        f"is not reachable via transitions"
+                    )
+
+                pc = stage_cfg.get("post_check")
+                if pc and pc not in _VALID_POST_CHECKS:
+                    errors.append(
+                        f"{prefix} stage '{stage_name}': unknown post_check "
+                        f"'{pc}'. Valid: {sorted(_VALID_POST_CHECKS)}"
+                    )
+
+                for action_key in ("pre_actions", "post_actions"):
+                    for j, acfg in enumerate(stage_cfg.get(action_key, [])):
+                        action_name = acfg.get("action", "")
+                        if action_name and action_name not in _ACTION_HANDLERS:
+                            errors.append(
+                                f"{prefix} stage '{stage_name}' {action_key}[{j}]: "
+                                f"unknown action '{action_name}'. "
+                                f"Registered: {sorted(_ACTION_HANDLERS.keys())}"
+                            )
+
+            # --- Heartbeat staggering (warnings only) ---
+            agents = mission_to_agents.get(mname, [])
+            if len(agents) > 1:
+                offsets = [
+                    (a.get("name", "?"), a.get("heartbeat_offset", 0))
+                    for a in agents
+                ]
+                seen_offsets: dict[int, str] = {}
+                for name, offset in offsets:
+                    if offset in seen_offsets:
+                        warnings.append(
+                            f"{prefix}: agents '{seen_offsets[offset]}' and "
+                            f"'{name}' have the same heartbeat_offset={offset}. "
+                            f"Stagger offsets to avoid thundering herd."
+                        )
+                    seen_offsets[offset] = name
+
+        # Append warnings as soft errors (prefixed for filtering)
+        for w in warnings:
+            errors.append(f"[warning] {w}")
 
         return errors
 

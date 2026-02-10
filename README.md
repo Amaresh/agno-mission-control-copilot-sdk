@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![PyPI](https://img.shields.io/badge/TestPyPI-v0.3.0-orange)](https://test.pypi.org/project/agno-mission-control/0.3.0/)
+[![PyPI](https://img.shields.io/badge/TestPyPI-v0.4.0-orange)](https://test.pypi.org/project/agno-mission-control/0.4.0/)
 
 > **A self-orchestrating AI agent platform that runs autonomous missions — not just code, but any workflow you can define as a YAML state machine.** Ships with two ready-to-go missions: a **build** pipeline (branch → code → PR) and a **content** pipeline (research → draft → review → publish → promote). Need something else? Define a deploy mission, a QA mission, an infra monitoring mission — any multi-stage workflow where agents pick up work, execute steps, and hand off to the next stage. Agents are YAML config entries, not code. Transitions are guarded by deterministic checks, not LLM output. Vision runs 16 automated health checks every hour, alerts you via Telegram, and you can fix issues from your phone in real-time. The entire system runs on modest hardware (even a $12 cloud server) because all LLM inference is delegated to GitHub Copilot SDK — no local GPU, no expensive API bills. Only a `GITHUB_TOKEN` is required; everything else (Telegram, Tavily, DigitalOcean) is bring-your-own-keys. The Agno framework silently learns from every interaction, so your squad gets measurably better at your workflows over days and weeks without manual tuning.
 
@@ -20,6 +20,26 @@ That's it. The wizard detects your system, authenticates GitHub, sets up the dat
 ## What It Does
 
 Mission Control is a **mission-driven agent orchestration platform**. You define missions (state machines), guards (transition checks), and agents (YAML config) — the platform handles scheduling, coordination, health monitoring, and learning.
+
+### This Is Not n8n
+
+Workflow automation tools (n8n, Zapier, Temporal) connect APIs through deterministic DAGs — trigger → node → node → done. Mission Control is fundamentally different:
+
+- **Autonomous agents** — they wake up via heartbeats, find their own work, reason about it with LLMs, and hand off to the next agent. No external trigger needed.
+- **Agents disagree** — Sage rejects Ink's draft, the task goes back to DRAFT, Ink rewrites. Revision loops between agents are first-class.
+- **Self-healing** — Vision detects stuck tasks and resets them. No workflow monitors other workflows and intervenes.
+- **Learning** — agents capture outcomes and adjust behavior over time. Nodes don't learn from past executions.
+- **Deep validation** — mission configs are validated at load time against 12 checks (state reachability, agent role coverage, guard registration, heartbeat staggering). Bad configs are blocked at startup, not discovered at 3am when agents crash.
+
+| | Mission Control | n8n / Zapier | Temporal |
+|---|---|---|---|
+| **Unit of work** | Autonomous agent with LLM reasoning | Stateless node | Deterministic activity |
+| **Coordination** | Agents hand off via state_agents mapping | DAG edges | Workflow orchestrator |
+| **Failure recovery** | Vision self-heals, revision loops | Retry or stop | Retry policy |
+| **Learning** | Captures outcomes, adapts over time | None | None |
+| **Config** | YAML state machine + guards | Visual DAG | Code (Go/Java/Python) |
+
+**TL;DR:** n8n connects APIs. Mission Control coordinates autonomous agents that think, disagree, recover, and learn.
 
 - **Flexible missions** — ships with `build` (branch → code → PR), `content` (research → write → review → publish → promote), and `verify` (review → approve) — or define any workflow as a YAML state machine
 - **Config-driven agents** — 18 default across two missions, add more by copying a YAML block. No code per agent.
@@ -251,6 +271,12 @@ Guards are deterministic checks — no LLM involved:
 | `has_error` | Last agent run produced an error |
 | `files_changed_ok` | Changed files pass validation |
 | `is_stale` | Task inactive for >90 min (configurable) |
+| `has_research` | Research file exists in content/research/ |
+| `has_draft` | Draft article exists in content/drafts/ |
+| `quality_approved` | Latest commit on draft contains [approved] |
+| `needs_revision` | Quality NOT approved (triggers revision loop) |
+| `is_published` | Published article exists in content/published/ |
+| `has_social_posts` | Social media content exists |
 
 Query available guards at runtime: `GET /workflow/guards`
 
@@ -371,6 +397,27 @@ All config lives in `~/.mission-control/` (or project root in dev mode):
 Define entirely new mission types with **zero Python code** — just `workflows.yaml` + prompt `.md` files.
 See the **[Custom Missions Guide](docs/CUSTOM_MISSIONS.md)** for the full schema reference,
 built-in actions, prompt authoring, and a step-by-step walkthrough.
+
+### Mission Validation
+
+Every mission config is validated at load time against **12 checks**. Bad configs are blocked at startup — not discovered at 3am when agents crash.
+
+| Check | Type | What It Catches |
+|-------|------|----------------|
+| States in TaskStatus enum | ❌ Error | Typo'd states crash at runtime |
+| initial_state has outgoing transitions | ❌ Error | Tasks stuck forever at start |
+| Path to DONE exists | ❌ Error | Missions that never complete |
+| state_agents roles match real agents | ❌ Error | Silent reassignment failure |
+| state_agents covers all states | ❌ Error | Tasks reach states with no agent handoff |
+| post_check values recognized | ❌ Error | Guards silently ignored |
+| Action types registered | ❌ Error | Actions fail at runtime |
+| Guards registered | ❌ Error | Unknown guards silently allow transitions |
+| Offset collisions | ⚠️ Warn | Thundering herd on heartbeats |
+| Multiple agents same role | ⚠️ Warn | Ambiguous reassignment |
+| Stage config for unreachable state | ⚠️ Warn | Dead config |
+| state_agents references unreachable state | ⚠️ Warn | Dead config |
+
+Run validation manually: `WorkflowLoader().validate_yaml(data)` returns a list of errors (empty = valid). Warnings are prefixed with `[warning]`.
 
 Example configs are provided in [`examples/missions/`](examples/missions/).
 
@@ -559,7 +606,7 @@ git clone https://github.com/Amaresh/agno-mission-control-copilot-sdk.git
 cd agno-mission-control-copilot-sdk
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest tests/ -q    # 164 E2E tests (no mocks)
+pytest tests/ -q    # 196 tests (E2E + heartbeat integration + mission validation)
 ```
 
 In dev mode, `paths.py` auto-detects the project root (via `pyproject.toml`) and uses it as `MC_HOME`. Set `MC_HOME=/custom/path` to override.
@@ -581,7 +628,7 @@ agno-mission-control/
 │   ├── mission_control/core/      # State machine, database, factory
 │   ├── mission_control/mcp/       # MCP server + registry
 │   └── squad/                     # Agent working dirs (SOUL.md, daily/)
-├── tests/                         # 164 E2E tests (no mocks)
+├── tests/                         # 196 tests (E2E + heartbeat + validation)
 ├── infra/systemd/                 # Dev systemd service files
 ├── workflows.yaml                 # Active workflow config
 ├── mcp_servers.yaml               # Active MCP server definitions
