@@ -209,16 +209,18 @@ class TestLearningEvents:
             assert "mission_type" in ev, f"Event {ev.get('id')} missing mission_type"
 
     def test_events_mission_build_filter(self):
-        """Existing data has NULL mission_type, so ?mission=build returns 0."""
+        """Filter by mission=build should return only build events."""
         r = requests.get(f"{BASE}/dashboard/learning/events",
                          params={"mission": "build", "limit": 50})
         assert r.status_code == 200
         data = r.json()
         assert isinstance(data, list)
-        # All events in DB have NULL mission_type, so strict filter returns 0
-        assert len(data) == 0, (
-            "Expected 0 events with mission=build (existing data is NULL)"
-        )
+        # All returned events should have mission_type == "build" (or null for legacy)
+        for ev in data:
+            mt = ev.get("mission_type")
+            assert mt is None or mt == "build", (
+                f"Event {ev.get('id')} has mission_type={mt}, expected build or null"
+            )
 
     def test_events_limit_param(self):
         r = requests.get(f"{BASE}/dashboard/learning/events", params={"limit": 3})

@@ -224,18 +224,20 @@ class TestContentMissionCRUD:
         r = api_post("/api/missions", json={
             "mission_type": self._name,
             "description": "E2E content pipeline test",
-            "initial_state": "research",
+            "initial_state": "RESEARCH",
             "stages": {
-                "research": {"prompt_template": "default"},
-                "write": {"prompt_template": "default"},
-                "review": {"prompt_template": "default"},
-                "publish": {"prompt_template": "default"},
+                "RESEARCH": {"prompt_template": "default"},
+                "DRAFT": {"prompt_template": "default"},
+                "REVIEW": {"prompt_template": "default"},
+                "PUBLISH": {"prompt_template": "default"},
+                "DONE": {"prompt_template": "default"},
             },
             "transitions": [
-                {"from": "research", "to": "write", "guard": "auto"},
-                {"from": "write", "to": "review", "guard": "auto"},
-                {"from": "review", "to": "publish", "guard": "auto"},
-                {"from": "review", "to": "write", "guard": "revision_needed"},
+                {"from": "RESEARCH", "to": "DRAFT"},
+                {"from": "DRAFT", "to": "REVIEW"},
+                {"from": "REVIEW", "to": "PUBLISH"},
+                {"from": "REVIEW", "to": "DRAFT"},
+                {"from": "PUBLISH", "to": "DONE"},
             ],
         })
         assert r.status_code == 200
@@ -246,25 +248,27 @@ class TestContentMissionCRUD:
         data = r.json()
         stages = data.get("stages", data)
         stage_names = set(stages.keys()) if isinstance(stages, dict) else set()
-        assert "research" in stage_names or "research" in str(data)
+        assert "RESEARCH" in stage_names or "RESEARCH" in str(data)
 
     def test_update_add_seo_stage(self):
         """Add an SEO optimization stage between write and review."""
         r = api_put(f"/api/missions/{self._name}", json={
             "description": "E2E content pipeline (updated with SEO)",
-            "initial_state": "research",
+            "initial_state": "RESEARCH",
             "stages": {
-                "research": {"prompt_template": "default"},
-                "write": {"prompt_template": "default"},
-                "seo_optimize": {"prompt_template": "default"},
-                "review": {"prompt_template": "default"},
-                "publish": {"prompt_template": "default"},
+                "RESEARCH": {"prompt_template": "default"},
+                "DRAFT": {"prompt_template": "default"},
+                "IN_PROGRESS": {"prompt_template": "default"},
+                "REVIEW": {"prompt_template": "default"},
+                "PUBLISH": {"prompt_template": "default"},
+                "DONE": {"prompt_template": "default"},
             },
             "transitions": [
-                {"from": "research", "to": "write", "guard": "auto"},
-                {"from": "write", "to": "seo_optimize", "guard": "auto"},
-                {"from": "seo_optimize", "to": "review", "guard": "auto"},
-                {"from": "review", "to": "publish", "guard": "auto"},
+                {"from": "RESEARCH", "to": "DRAFT"},
+                {"from": "DRAFT", "to": "IN_PROGRESS"},
+                {"from": "IN_PROGRESS", "to": "REVIEW"},
+                {"from": "REVIEW", "to": "PUBLISH"},
+                {"from": "PUBLISH", "to": "DONE"},
             ],
         })
         assert r.status_code == 200
@@ -329,6 +333,10 @@ class TestCrossMissionIsolation:
 
 class TestBuiltinToolExclusion:
     """Verify that SDK built-in tools are excluded for non-Vision agents."""
+
+    @pytest.fixture(autouse=True)
+    def _require_copilot_sdk(self):
+        pytest.importorskip("copilot", reason="GitHub Copilot SDK not installed")
 
     def test_excluded_tools_list_complete(self):
         """The exclusion list should cover all dangerous built-in tools."""

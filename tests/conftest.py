@@ -13,6 +13,7 @@ from mission_control.mission_control.core.database import (
     Agent,
     AgentLevel,
     AgentStatus,
+    Base,
     LearningEvent,
     LearningPattern,
     Task,
@@ -95,7 +96,9 @@ async def cleanup_pattern(pattern_id: uuid.UUID):
 
 @pytest_asyncio.fixture(scope="session", autouse=True)
 async def sweep_test_data():
-    """Safety net: remove any TestAgent-* rows left behind by crashed tests."""
+    """Create tables (SQLite) then clean up any TestAgent-* rows after tests."""
+    async with _test_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
     yield
     async with TestSession() as s:
         from sqlalchemy import select

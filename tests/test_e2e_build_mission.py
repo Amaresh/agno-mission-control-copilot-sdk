@@ -237,12 +237,12 @@ class TestBuildMissionCRUD:
         r = api_post("/api/missions", json={
             "mission_type": self._test_mission_name,
             "description": "E2E test mission",
-            "initial_state": "init",
+            "initial_state": "ASSIGNED",
             "stages": {
-                "init": {"prompt_template": "default"},
-                "done": {"prompt_template": "default"},
+                "ASSIGNED": {"prompt_template": "default"},
+                "DONE": {"prompt_template": "default"},
             },
-            "transitions": [{"from": "init", "to": "done"}],
+            "transitions": [{"from": "ASSIGNED", "to": "DONE"}],
         })
         assert r.status_code == 200
         data = r.json()
@@ -252,20 +252,20 @@ class TestBuildMissionCRUD:
         r = api_get(f"/api/missions/{self._test_mission_name}")
         assert r.status_code == 200
         data = r.json()
-        assert "stages" in data or "init" in str(data)
+        assert "stages" in data or "ASSIGNED" in str(data)
 
     def test_update_mission(self):
         r = api_put(f"/api/missions/{self._test_mission_name}", json={
             "description": "E2E test mission (updated)",
-            "initial_state": "init",
+            "initial_state": "ASSIGNED",
             "stages": {
-                "init": {"prompt_template": "default"},
-                "review": {"prompt_template": "default"},
-                "done": {"prompt_template": "default"},
+                "ASSIGNED": {"prompt_template": "default"},
+                "REVIEW": {"prompt_template": "default"},
+                "DONE": {"prompt_template": "default"},
             },
             "transitions": [
-                {"from": "init", "to": "review"},
-                {"from": "review", "to": "done"},
+                {"from": "ASSIGNED", "to": "REVIEW"},
+                {"from": "REVIEW", "to": "DONE"},
             ],
         })
         assert r.status_code == 200

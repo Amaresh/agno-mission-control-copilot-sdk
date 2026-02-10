@@ -490,12 +490,26 @@ class WorkflowLoader:
         return errors
 
     def reload(self):
-        """Hot-reload: re-read YAML and rebuild everything."""
+        """Hot-reload: re-read YAML and rebuild everything.
+
+        Atomic: if loading fails, the previous valid state is preserved.
+        """
+        old_missions = self._missions
+        old_agents = self._agents
+        old_machines = self._state_machines
+        old_loaded = self._loaded
         self._loaded = False
         self._missions = {}
         self._agents = {}
         self._state_machines = {}
-        self.load()
+        try:
+            self.load()
+        except Exception:
+            self._missions = old_missions
+            self._agents = old_agents
+            self._state_machines = old_machines
+            self._loaded = old_loaded
+            raise
 
     def to_dict(self) -> dict:
         """Export current config as dict (for GET /workflow)."""
